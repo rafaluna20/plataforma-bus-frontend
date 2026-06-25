@@ -1,0 +1,7 @@
+# Coloca aquí las imágenes de vehículos:
+# - bus-2p.png   (Bus 2 pisos)
+# - bus-1p.png   (Bus 1 piso)
+# - minivan.png  (Minivan)
+# - auto.png     (Auto)
+#
+# Si no existen, el componente mostrará un placeholder SVG automáticamente.

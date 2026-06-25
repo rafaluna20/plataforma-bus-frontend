@@ -5,7 +5,8 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Bus, Ticket, BarChart3, Settings, LogOut,
-  Menu, X, ChevronRight, RefreshCw, Home
+  Menu, X, ChevronRight, RefreshCw, Home,
+  Map, Building2
 } from "lucide-react";
 import { getCurrentUser, logout, authFetch } from "@/lib/auth";
 
@@ -92,6 +93,24 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
       href: `/empresa/${slugStr}/admin/viajes`,
       label: "Mis Viajes",
       icon: <Bus className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/rutas`,
+      label: "Gestión de Rutas",
+      icon: <Map className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/vehiculos`,
+      label: "Flota de Vehículos",
+      icon: <Bus className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/perfil`,
+      label: "Perfil de Empresa",
+      icon: <Building2 className="w-5 h-5" />,
       exact: false,
     },
   ];
@@ -205,7 +224,7 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
             </div>
 
             {/* Navegación */}
-            <nav className="p-3 space-y-1">
+            <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-280px)]">
               <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider px-3 py-2">Operaciones</p>
               {navItems.map(item => {
                 const active = isActive(item);

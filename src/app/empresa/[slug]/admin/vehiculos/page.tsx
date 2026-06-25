@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Bus, Plus, Trash2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import { useParams } from "next/navigation";
+import { Bus, Plus, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import ImageUploader from "@/components/ui/ImageUploader";
 import SeatConfigEditor, { SeatTemplate } from "@/components/ui/SeatConfigEditor";
@@ -18,7 +18,7 @@ type Vehicle = {
   isActive: boolean;
   createdAt: string;
   imageUrl?: string | null;
-  seatTemplate?: { id: string }[];
+  seatTemplate?: any[];
 };
 
 const VEHICLE_TYPES = [
@@ -34,18 +34,18 @@ const SERVICE_MODES = [
 ];
 
 const typeIcon: Record<string, string> = {
-  MINIVAN: "🚐",
-  BUS_1P:  "🚌",
-  BUS_2P:  "🚍",
-  AUTO:    "🚗",
+  MINIVAN: "🚐", BUS_1P: "🚌", BUS_2P: "🚍", AUTO: "🚗",
 };
 
-export default function VehiculosPage() {
-  const router = useRouter();
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+export default function EmpresaAdminVehiculosPage() {
+  const { slug } = useParams();
+  const slugStr = Array.isArray(slug) ? slug[0] : slug;
+
   const [companyId, setCompanyId] = useState("");
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // Formulario
   const [showForm, setShowForm] = useState(false);
@@ -59,35 +59,29 @@ export default function VehiculosPage() {
   const [seatTemplate, setSeatTemplate] = useState<SeatTemplate | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
-  const [formSuccess, setFormSuccess] = useState("");
 
   const handleSeatConfigChange = useCallback((template: SeatTemplate, capacity: number) => {
     setSeatTemplate(template);
     setForm(f => ({ ...f, capacity }));
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useEffect(() => { loadData(); }, [slugStr]);
 
   async function loadData() {
     setLoading(true);
     setError("");
     try {
-      // Usar /auth/me para obtener el companyId del usuario logueado (igual que el panel admin)
-      const profileRes = await authFetch(`${API}/api/v1/auth/me`);
-      const profileData = await profileRes.json();
-      const cid = profileData.company?.id || profileData.companyId;
-      if (!cid) { setError("No se encontró empresa asociada a tu cuenta."); setLoading(false); return; }
-
+      const compRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
+      const compData = await compRes.json();
+      if (!compRes.ok) throw new Error("Empresa no encontrada");
+      const cid = compData.company?.id;
       setCompanyId(cid);
 
       const vRes = await authFetch(`${API}/api/v1/vehicles/company/${cid}`);
       const vData = await vRes.json();
       setVehicles(vData.vehicles || []);
-    } catch (e) {
-      setError("Error al cargar los vehículos.");
-      console.error(e);
+    } catch (e: any) {
+      setError(e.message || "Error al cargar vehículos");
     } finally {
       setLoading(false);
     }
@@ -96,18 +90,14 @@ export default function VehiculosPage() {
   async function createVehicle(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    setFormSuccess("");
 
     if (!form.plateNumber.trim()) { setFormError("La placa es obligatoria."); return; }
     if (form.capacity < 1 || form.capacity > 100) { setFormError("La capacidad debe estar entre 1 y 100."); return; }
 
     setSaving(true);
     try {
-      // Incluir seatTemplate personalizado si fue configurado
       const payload: any = { companyId, ...form };
-      if (seatTemplate) {
-        payload.seatTemplate = seatTemplate;
-      }
+      if (seatTemplate) payload.seatTemplate = seatTemplate;
 
       const res = await authFetch(`${API}/api/v1/vehicles`, {
         method: "POST",
@@ -116,10 +106,12 @@ export default function VehiculosPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al registrar vehículo");
 
-      setFormSuccess(`Vehículo ${data.vehicle?.plateNumber || form.plateNumber} registrado exitosamente.`);
+      setSuccess(`✅ Vehículo ${data.vehicle?.plateNumber || form.plateNumber} registrado exitosamente.`);
       setForm({ plateNumber: "", vehicleType: "MINIVAN", serviceMode: "INTERPROVINCIAL", capacity: 12, imageUrl: "" });
+      setSeatTemplate(null);
       setShowForm(false);
       loadData();
+      setTimeout(() => setSuccess(""), 4000);
     } catch (e: any) {
       setFormError(e.message);
     } finally {
@@ -131,54 +123,49 @@ export default function VehiculosPage() {
   const inactiveVehicles = vehicles.filter(v => !v.isActive);
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-8">
+    <div className="space-y-6">
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <button onClick={() => router.push("/admin")}
-            className="p-2 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-white">Gestión de Flota</h1>
-            <p className="text-slate-400 text-sm mt-0.5">
-              {loading ? "Cargando..." : `${vehicles.length} vehículo${vehicles.length !== 1 ? "s" : ""} registrado${vehicles.length !== 1 ? "s" : ""}`}
-            </p>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Bus className="w-6 h-6 text-indigo-400" />
+            Gestión de Flota
+          </h1>
+          <p className="text-slate-400 text-sm mt-0.5">
+            {loading ? "Cargando..." : `${vehicles.length} vehículo${vehicles.length !== 1 ? "s" : ""} registrado${vehicles.length !== 1 ? "s" : ""}`}
+          </p>
         </div>
         <div className="flex gap-3">
           <button onClick={loadData}
             className="p-2 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
             <RefreshCw className="w-5 h-5" />
           </button>
-          <button onClick={() => { setShowForm(v => !v); setFormError(""); setFormSuccess(""); }}
-            className="gradient-btn flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white">
+          <button
+            onClick={() => { setShowForm(v => !v); setFormError(""); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white transition-all hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
             <Plus className="w-5 h-5" /> Agregar Vehículo
           </button>
         </div>
       </div>
 
-      {/* Mensaje de éxito global */}
-      {formSuccess && (
+      {/* Mensajes */}
+      {success && (
         <div className="flex items-center gap-3 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm">
-          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-          {formSuccess}
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> {success}
         </div>
       )}
-
-      {/* Error global */}
       {error && (
         <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          {error}
+          <AlertCircle className="w-5 h-5 flex-shrink-0" /> {error}
         </div>
       )}
 
-      {/* ─── Formulario de nuevo vehículo ─────────────────────────────────── */}
+      {/* ─── Formulario nuevo vehículo ─────────────────────────────────────── */}
       {showForm && (
         <form onSubmit={createVehicle}
-          className="glass-card p-6 space-y-5 border border-indigo-500/30">
+          className="bg-slate-900/80 border border-indigo-500/30 rounded-2xl p-6 space-y-5">
           <h2 className="font-semibold text-white text-lg">Registrar Nuevo Vehículo</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -233,23 +220,21 @@ export default function VehiculosPage() {
             </div>
           </div>
 
-          {/* Imagen del vehículo — con optimización automática */}
-          <div className="col-span-1 md:col-span-2">
-            <ImageUploader
-              label="Foto del Vehículo"
-              hint="Se redimensionará a 800×400px y se convertirá a WebP antes de subir. Recomendado: foto lateral del bus."
-              value={form.imageUrl}
-              onChange={url => setForm(f => ({ ...f, imageUrl: url }))}
-              maxWidth={800}
-              maxHeight={400}
-              quality={0.85}
-              fit="contain"
-              folder="vehiculos"
-            />
-          </div>
+          {/* Imagen del vehículo */}
+          <ImageUploader
+            label="Foto del Vehículo"
+            hint="Se redimensionará a 800×400px y se convertirá a WebP. Recomendado: foto lateral del bus."
+            value={form.imageUrl}
+            onChange={url => setForm(f => ({ ...f, imageUrl: url }))}
+            maxWidth={800}
+            maxHeight={400}
+            quality={0.85}
+            fit="contain"
+            folder="vehiculos"
+          />
 
-          {/* ─── Configurador visual de asientos ─────────────────────────── */}
-          <div className="col-span-1 md:col-span-2 border-t border-white/5 pt-4">
+          {/* Configurador visual de asientos */}
+          <div className="border-t border-white/5 pt-4">
             <SeatConfigEditor
               vehicleType={form.vehicleType}
               onChange={handleSeatConfigChange}
@@ -257,9 +242,8 @@ export default function VehiculosPage() {
           </div>
 
           {formError && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              {formError}
+            <div className="flex items-center gap-2 text-red-400 text-sm p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {formError}
             </div>
           )}
 
@@ -269,7 +253,8 @@ export default function VehiculosPage() {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="gradient-btn px-6 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center gap-2">
+              className="px-6 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center gap-2 transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
               {saving ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando...</>
               ) : (
@@ -280,12 +265,10 @@ export default function VehiculosPage() {
         </form>
       )}
 
-      {/* ─── Lista de vehículos ────────────────────────────────────────────── */}
+      {/* ─── Lista de vehículos ─────────────────────────────────────────────── */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-24 bg-white/5 rounded-xl animate-pulse" />
-          ))}
+          {[1, 2, 3].map(i => <div key={i} className="h-24 bg-white/5 rounded-xl animate-pulse" />)}
         </div>
       ) : vehicles.length === 0 ? (
         <div className="flex flex-col items-center gap-4 py-20 text-center">
@@ -297,30 +280,23 @@ export default function VehiculosPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Activos */}
           {activeVehicles.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
                 Activos ({activeVehicles.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {activeVehicles.map(v => (
-                  <VehicleCard key={v.id} vehicle={v} />
-                ))}
+                {activeVehicles.map(v => <VehicleCard key={v.id} vehicle={v} />)}
               </div>
             </div>
           )}
-
-          {/* Inactivos */}
           {inactiveVehicles.length > 0 && (
             <div className="space-y-3">
               <h2 className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
                 Inactivos ({inactiveVehicles.length})
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-60">
-                {inactiveVehicles.map(v => (
-                  <VehicleCard key={v.id} vehicle={v} />
-                ))}
+                {inactiveVehicles.map(v => <VehicleCard key={v.id} vehicle={v} />)}
               </div>
             </div>
           )}
@@ -336,9 +312,9 @@ function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
   const modeLabel = SERVICE_MODES.find(m => m.value === vehicle.serviceMode)?.label || vehicle.serviceMode;
 
   return (
-    <div className="glass-card overflow-hidden hover:border-indigo-500/30 transition-all">
+    <div className="bg-slate-900/60 border border-white/5 rounded-2xl overflow-hidden hover:border-indigo-500/30 transition-all">
       <div className="flex items-stretch">
-        {/* Imagen del vehículo */}
+        {/* Imagen */}
         <div className="w-32 flex-shrink-0 bg-slate-800/60 flex items-center justify-center p-3 border-r border-white/5">
           {vehicle.imageUrl ? (
             <img
@@ -368,28 +344,17 @@ function VehicleCard({ vehicle }: { vehicle: Vehicle }) {
             </span>
           </div>
           <p className="text-slate-400 text-sm mt-0.5">{typeLabel} · {modeLabel}</p>
-
-          {/* Asientos */}
           <div className="mt-2 flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-xs text-slate-400">
               <span className="text-indigo-400 font-bold text-base">{vehicle.capacity}</span>
               asientos
             </div>
-            <div className="flex flex-wrap gap-1 max-w-[160px]">
-              {Array.isArray(vehicle.seatTemplate) && vehicle.seatTemplate.slice(0, 10).map((s, idx) => (
-                <div key={typeof s === "object" && s !== null ? (s as any).id ?? idx : idx}
-                  className="w-4 h-4 rounded bg-slate-700 border border-slate-600 flex items-center justify-center text-[8px] text-slate-400">
-                  {idx + 1}
-                </div>
-              ))}
-              {Array.isArray(vehicle.seatTemplate) && vehicle.seatTemplate.length > 10 && (
-                <div className="w-4 h-4 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-[8px] text-slate-500">
-                  +{vehicle.seatTemplate.length - 10}
-                </div>
-              )}
-            </div>
+            {Array.isArray(vehicle.seatTemplate) && vehicle.seatTemplate.length > 0 && (
+              <span className="text-xs text-slate-500">
+                ({vehicle.seatTemplate.length} asientos configurados)
+              </span>
+            )}
           </div>
-
           <p className="text-xs text-slate-600 mt-1.5">
             Registrado: {new Date(vehicle.createdAt).toLocaleDateString("es-PE")}
           </p>

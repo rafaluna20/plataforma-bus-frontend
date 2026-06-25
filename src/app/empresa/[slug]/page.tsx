@@ -6,10 +6,19 @@ import {
   Phone, Mail, Globe, MapPin, Bus, ArrowRight,
   Clock, Users, AlertCircle, ArrowLeft, Search,
   Calendar, ArrowRightLeft, Sparkles, CheckCircle2,
-  Info, Route, Menu, X, Settings
+  Info, Route, Menu, X, Settings, Lock, Eye, EyeOff, Loader2
 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { useAuth } from "@/context/AuthContext";
+import dynamic from "next/dynamic";
+
+const AdminDashboard = dynamic(() => import("./admin/page"), { ssr: false });
+const AdminVenta = dynamic(() => import("./admin/venta/page"), { ssr: false });
+const AdminViajes = dynamic(() => import("./admin/viajes/page"), { ssr: false });
+const AdminRutas = dynamic(() => import("./admin/rutas/page"), { ssr: false });
+const AdminVehiculos = dynamic(() => import("./admin/vehiculos/page"), { ssr: false });
+const AdminPerfil = dynamic(() => import("./admin/perfil/page"), { ssr: false });
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -46,7 +55,7 @@ const vehicleTypeLabel: Record<string, string> = {
   AUTO: "Auto",
 };
 
-type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros";
+type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-perfil";
 
 export default function EmpresaPublicaPage() {
   const { slug } = useParams();
@@ -57,6 +66,14 @@ export default function EmpresaPublicaPage() {
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<SidebarSection>("viajes");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getCurrentUser>>(null);
+  const { login, logout } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Buscador y filtros
   const [origin, setOrigin] = useState("");
@@ -64,10 +81,14 @@ export default function EmpresaPublicaPage() {
   const [date, setDate] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [routeFilter, setRouteFilter] = useState("");
+  const [timeFilter, setTimeFilter] = useState("");
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     loadCompany();
+    // Leer el usuario del localStorage en el cliente
+    const user = getCurrentUser();
+    setCurrentUser(user);
   }, [slug]);
 
   async function loadCompany() {
@@ -114,12 +135,69 @@ export default function EmpresaPublicaPage() {
     await loadTrips(company.id, { origin, destination, date, vehicleType: vehicleFilter });
   }
 
-  // Filtrado local por ruta (sobre los viajes ya cargados)
-  const filteredTrips = routeFilter
-    ? trips.filter(t => t.route?.name === routeFilter)
-    : vehicleFilter && !origin && !destination && !date
-      ? trips.filter(t => t.vehicle?.vehicleType === vehicleFilter)
-      : trips;
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoginError("");
+    setLoginLoading(true);
+    try {
+      await login(loginEmail, loginPassword);
+      const user = getCurrentUser();
+      setCurrentUser(user);
+      setShowLoginModal(false);
+      setLoginEmail("");
+      setLoginPassword("");
+      
+      // Redirigir al panel de administración externo si es admin
+      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && company && (user.companyId === company.id || user.role === "SUPER_ADMIN")) {
+        router.push(`/empresa/${slug}/admin`);
+      }
+    } catch (err: any) {
+      setLoginError(err.message || "Credenciales incorrectas.");
+    } finally {
+      setLoginLoading(false);
+    }
+  }
+
+  async function handleLogout() {
+    await logout();
+    setCurrentUser(null);
+    setActiveSection("viajes");
+  }
+
+  // Filtrado local
+  const filteredTrips = trips.filter(t => {
+    // 1. Filtro por ruta
+    if (routeFilter && t.route?.name !== routeFilter) return false;
+    
+    // 2. Filtro por vehículo
+    if (vehicleFilter && t.vehicle?.vehicleType !== vehicleFilter) return false;
+    
+    // 3. Filtro por tiempo (cubre tanto pasado como futuro para no ocultar viajes próximos)
+    if (timeFilter) {
+      const tripDate = new Date(t.departureTime);
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      if (timeFilter === "hoy") {
+        if (tripDate < startOfToday || tripDate > endOfToday) return false;
+      } else if (timeFilter === "semana") {
+        const pastWeek = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const nextWeek = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000);
+        if (tripDate < pastWeek || tripDate > nextWeek) return false;
+      } else if (timeFilter === "mes") {
+        const pastMonth = new Date(startOfToday.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const nextMonth = new Date(startOfToday.getTime() + 30 * 24 * 60 * 60 * 1000);
+        if (tripDate < pastMonth || tripDate > nextMonth) return false;
+      } else if (timeFilter === "ano") {
+        const pastYear = new Date(startOfToday.getTime() - 365 * 24 * 60 * 60 * 1000);
+        const nextYear = new Date(startOfToday.getTime() + 365 * 24 * 60 * 60 * 1000);
+        if (tripDate < pastYear || tripDate > nextYear) return false;
+      }
+    }
+    
+    return true;
+  });
 
   const primaryColor = company?.primaryColor || "#6366f1";
   const secondaryColor = company?.secondaryColor || "#8b5cf6";
@@ -304,26 +382,69 @@ export default function EmpresaPublicaPage() {
               )}
             </div>
 
-            {/* Acceso al panel admin (solo si el usuario es admin de esta empresa) */}
-            {(() => {
-              const user = typeof window !== "undefined" ? getCurrentUser() : null;
-              const isAdmin = user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
-              const slugStr = Array.isArray(slug) ? slug[0] : slug;
-              if (!isAdmin) return null;
-              return (
-                <div className="p-3 border-t border-white/5">
-                  <Link href={`/empresa/${slugStr}/admin`}
-                    className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-white w-full"
-                    style={{ background: `linear-gradient(135deg, ${primaryColor}30, ${secondaryColor}20)`, border: `1px solid ${primaryColor}40` }}>
-                    <Settings className="w-4 h-4 flex-shrink-0" style={{ color: primaryColor }} />
-                    Panel Admin
-                  </Link>
+            {/* ─── PANEL DE GESTIÓN ADMIN (solo visible para admin de esta empresa) */}
+            {currentUser && (currentUser.role === "ADMIN" || currentUser.role === "SUPER_ADMIN") && (
+              <div className="border-t border-white/5">
+                {/* Header de la sección */}
+                <div className="px-4 pt-3 pb-1 flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-widest"
+                    style={{ color: primaryColor }}>
+                    ⚙ Gestión Admin
+                  </p>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
+                    style={{ background: `${primaryColor}20`, color: primaryColor }}>
+                    ADMIN
+                  </span>
                 </div>
-              );
-            })()}
+
+                {/* Links de administración */}
+                <nav className="p-2 space-y-0.5">
+                  {[
+                    { id: "admin-dashboard", label: "Dashboard", emoji: "📊" },
+                    { id: "admin-venta", label: "Venta de Pasajes", emoji: "🎫" },
+                    { id: "admin-viajes", label: "Mis Viajes", emoji: "🚌" },
+                    { id: "admin-rutas", label: "Gestión de Rutas", emoji: "🗺️" },
+                    { id: "admin-vehiculos", label: "Flota de Vehículos", emoji: "🚐" },
+                    { id: "admin-perfil", label: "Perfil de Empresa", emoji: "🏢" },
+                  ].map(item => (
+                    <button key={item.id}
+                      onClick={() => { setActiveSection(item.id as SidebarSection); setSidebarOpen(false); }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group text-left ${
+                        activeSection === item.id ? "text-white bg-white/10" : "text-slate-400 hover:text-white hover:bg-white/5"
+                      }`}>
+                      <span className="text-sm">{item.emoji}</span>
+                      <span className="group-hover:translate-x-0.5 transition-transform">{item.label}</span>
+                    </button>
+                  ))}
+                </nav>
+
+                {/* Botón principal destacado */}
+                <div className="px-3 pb-3 space-y-2">
+                  <button onClick={() => { setActiveSection("admin-dashboard"); setSidebarOpen(false); }}
+                    className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
+                    style={{
+                      background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+                      boxShadow: `0 4px 15px ${primaryColor}40`,
+                    }}>
+                    <Settings className="w-4 h-4" />
+                    Panel Principal
+                  </button>
+                  <button onClick={handleLogout}
+                    className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 transition-all">
+                    Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer sidebar */}
-            <div className="p-4 border-t border-white/5">
+            <div className="p-4 border-t border-white/5 space-y-3">
+              {(!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "SUPER_ADMIN")) && (
+                <button onClick={() => setShowLoginModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 border border-white/10 transition-all">
+                  🔑 Acceso Administrativo
+                </button>
+              )}
               <p className="text-xs text-slate-600 text-center">
                 Powered by{" "}
                 <Link href="/" className="text-indigo-400 hover:text-indigo-300 transition-colors">
@@ -389,42 +510,65 @@ export default function EmpresaPublicaPage() {
                 </div>
 
                 {/* Filtros rápidos */}
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {/* Filtro por tipo de vehículo */}
-                  {Object.entries(vehicleTypeLabel).map(([key, label]) => (
-                    <button key={key} type="button"
-                      onClick={() => setVehicleFilter(vehicleFilter === key ? "" : key)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                        vehicleFilter === key
-                          ? "text-white border-transparent"
-                          : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
-                      }`}
-                      style={vehicleFilter === key ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
-                      🚌 {label}
-                    </button>
-                  ))}
+                <div className="flex flex-col gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2">
+                    {/* Filtro por tipo de vehículo */}
+                    {Object.entries(vehicleTypeLabel).map(([key, label]) => (
+                      <button key={key} type="button"
+                        onClick={() => setVehicleFilter(vehicleFilter === key ? "" : key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          vehicleFilter === key
+                            ? "text-white border-transparent"
+                            : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                        }`}
+                        style={vehicleFilter === key ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
+                        🚌 {label}
+                      </button>
+                    ))}
 
-                  {/* Filtro por ruta */}
-                  {uniqueRoutes.length > 0 && (
-                    <select
-                      value={routeFilter}
-                      onChange={e => setRouteFilter(e.target.value)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/50 text-slate-400 focus:outline-none transition-colors">
-                      <option value="">Todas las rutas</option>
-                      {uniqueRoutes.map(r => (
-                        <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  )}
+                    {/* Filtro por ruta */}
+                    {uniqueRoutes.length > 0 && (
+                      <select
+                        value={routeFilter}
+                        onChange={e => setRouteFilter(e.target.value)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/50 text-slate-400 focus:outline-none transition-colors">
+                        <option value="">Todas las rutas</option>
+                        {uniqueRoutes.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
 
-                  {/* Limpiar filtros */}
-                  {(vehicleFilter || routeFilter || origin || destination || date) && (
-                    <button type="button"
-                      onClick={() => { setVehicleFilter(""); setRouteFilter(""); setOrigin(""); setDestination(""); setDate(""); if (company) loadTrips(company.id); }}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
-                      ✕ Limpiar filtros
-                    </button>
-                  )}
+                  {/* Filtro de Tiempo */}
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { id: "hoy", label: "Hoy" },
+                      { id: "semana", label: "Última semana" },
+                      { id: "mes", label: "Último mes" },
+                      { id: "ano", label: "Último año" },
+                    ].map(item => (
+                      <button key={item.id} type="button"
+                        onClick={() => setTimeFilter(timeFilter === item.id ? "" : item.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                          timeFilter === item.id
+                            ? "text-white border-transparent"
+                            : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                        }`}
+                        style={timeFilter === item.id ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
+                        📅 {item.label}
+                      </button>
+                    ))}
+
+                    {/* Limpiar filtros */}
+                    {(vehicleFilter || routeFilter || timeFilter || origin || destination || date) && (
+                      <button type="button"
+                        onClick={() => { setVehicleFilter(""); setRouteFilter(""); setTimeFilter(""); setOrigin(""); setDestination(""); setDate(""); if (company) loadTrips(company.id); }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
+                        ✕ Limpiar filtros
+                      </button>
+                    )}
+                  </div>
                 </div>
               </form>
 
@@ -684,8 +828,83 @@ export default function EmpresaPublicaPage() {
               </div>
             </div>
           )}
+          {/* ── SECCIONES ADMINISTRATIVAS (SPA) ─────────────────────────── */}
+          {activeSection === "admin-dashboard" && <AdminDashboard />}
+          {activeSection === "admin-venta" && <AdminVenta />}
+          {activeSection === "admin-viajes" && <AdminViajes />}
+          {activeSection === "admin-rutas" && <AdminRutas />}
+          {activeSection === "admin-vehiculos" && <AdminVehiculos />}
+          {activeSection === "admin-perfil" && <AdminPerfil />}
+
         </main>
       </div>
+
+      {/* ── MODAL DE LOGIN ─────────────────────────────────────────────── */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-6 relative">
+              <button onClick={() => setShowLoginModal(false)}
+                className="absolute top-4 right-4 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              <div className="text-center mb-6 mt-2">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-indigo-500 to-cyan-500 rounded-xl mb-3 shadow-lg shadow-indigo-500/25">
+                  <Lock className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-xl font-bold text-white">Acceso Administrativo</h3>
+                <p className="text-sm text-slate-400 mt-1">Inicia sesión para gestionar {company.tradeName}</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                {loginError && (
+                  <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-1.5">Correo electrónico</label>
+                  <div className="relative">
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)}
+                      placeholder="admin@empresa.com" required
+                      className="w-full bg-slate-950/50 border border-slate-700 rounded-xl py-2.5 pl-9 pr-4 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-1 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-1.5">Contraseña</label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                    <input type={showPassword ? "text" : "password"} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="••••••••" required
+                      className="w-full bg-slate-950/50 border border-slate-700 rounded-xl py-2.5 pl-9 pr-10 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-1 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors">
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" disabled={loginLoading}
+                  className="w-full text-white font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2 mt-4 shadow-lg hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                  style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                  {loginLoading ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /> Verificando...</>
+                  ) : (
+                    "Ingresar al Panel"
+                  )}
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

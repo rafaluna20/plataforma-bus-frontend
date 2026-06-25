@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Bus, Clock, ArrowRight, CheckCircle2, AlertCircle,
-  Loader2, Banknote, CreditCard, Printer, RefreshCw, X
+  Loader2, Banknote, CreditCard, Printer, RefreshCw, X, Ticket
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
+import TicketModal from "@/components/trips/TicketModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -64,6 +65,8 @@ export default function EmpresaAdminVentaPage() {
   const [secondaryColor, setSecondaryColor] = useState("#8b5cf6");
   const [companyId, setCompanyId] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [companyRuc, setCompanyRuc] = useState("");
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | undefined>(undefined);
 
   // Viajes
   const [trips, setTrips] = useState<TripItem[]>([]);
@@ -93,6 +96,11 @@ export default function EmpresaAdminVentaPage() {
   const [bookingError, setBookingError] = useState("");
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null);
 
+  // Ticket modal
+  const [ticketOpen, setTicketOpen] = useState(false);
+  const [lastPassengerName, setLastPassengerName] = useState("");
+  const [lastPassengerDoc, setLastPassengerDoc] = useState("");
+
   useEffect(() => {
     loadCompany();
   }, [slugStr]);
@@ -105,6 +113,8 @@ export default function EmpresaAdminVentaPage() {
       const cid = data.company.id;
       setCompanyId(cid);
       setCompanyName(data.company.tradeName);
+      setCompanyRuc(data.company.ruc || "");
+      setCompanyLogoUrl(data.company.logoUrl || undefined);
       setPrimaryColor(data.company.primaryColor || "#6366f1");
       setSecondaryColor(data.company.secondaryColor || "#8b5cf6");
       await loadTrips(cid, searchDate);
@@ -148,6 +158,7 @@ export default function EmpresaAdminVentaPage() {
     setSelectedSeat("");
     setReceipt(null);
     setBookingError("");
+    setTicketOpen(false);
     setLoadingTrip(true);
 
     try {
@@ -188,6 +199,22 @@ export default function EmpresaAdminVentaPage() {
     return Array.from({ length: selectedTrip.vehicle.capacity }, (_, i) => `S${i + 1}`);
   }
 
+  /** Calcula duración total del tramo seleccionado en minutos */
+  function calcDurationMins(): number {
+    if (!selectedTrip) return 0;
+    const wps = selectedTrip.route.waypoints;
+    const startWp = wps.find(w => w.id === startWaypointId);
+    const endWp = wps.find(w => w.id === endWaypointId);
+    if (!startWp || !endWp) return 0;
+    let mins = 0;
+    for (const wp of wps) {
+      if (wp.stopOrder >= startWp.stopOrder && wp.stopOrder < endWp.stopOrder) {
+        mins += Number(wp.estimatedDurationMins);
+      }
+    }
+    return mins;
+  }
+
   async function handleReserve(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedTrip || !selectedSeat) return;
@@ -202,6 +229,10 @@ export default function EmpresaAdminVentaPage() {
 
     setBooking(true);
     setBookingError("");
+
+    // Guardar datos del pasajero antes de limpiar el form
+    const savedPassengerName = passengerName.trim();
+    const savedPassengerDoc = `${passengerDocType}: ${passengerDocNum.trim()}`;
 
     try {
       const endpoint = paymentMethod === "cash"
@@ -230,11 +261,16 @@ export default function EmpresaAdminVentaPage() {
       if (!res.ok) throw new Error(data.error || "Error al registrar la venta");
 
       setReceipt(data.booking);
+      setLastPassengerName(savedPassengerName);
+      setLastPassengerDoc(savedPassengerDoc);
       setOccupiedSeats(prev => [...prev, selectedSeat]);
       setSelectedSeat("");
       setPassengerName("");
       setPassengerDocNum("");
       setPassengerPhone("");
+
+      // Abrir el ticket automáticamente
+      setTicketOpen(true);
     } catch (e: any) {
       setBookingError(e.message);
     } finally {
@@ -246,6 +282,32 @@ export default function EmpresaAdminVentaPage() {
   const seats = getSeats();
   const waypoints = selectedTrip?.route.waypoints || [];
   const freeSeats = selectedTrip ? selectedTrip.vehicle.capacity - occupiedSeats.length : 0;
+
+  // Datos para el TicketModal
+  const ticketData = receipt && selectedTrip ? {
+    companyName,
+    companyRuc: companyRuc || undefined,
+    companyLogoUrl,
+    origin: (() => {
+      const wp = waypoints.find(w => w.id === startWaypointId);
+      return wp ? `${wp.station.city}-${wp.station.name}` : waypoints[0]?.station?.name || "—";
+    })(),
+    destination: (() => {
+      const wp = waypoints.find(w => w.id === endWaypointId);
+      return wp ? `${wp.station.city}-${wp.station.name}` : waypoints[waypoints.length - 1]?.station?.name || "—";
+    })(),
+    departureTime: selectedTrip.departureTime,
+    passengerName: lastPassengerName,
+    passengerDoc: lastPassengerDoc,
+    seatId: receipt.seatId,
+    seatLabel: receipt.seatId,
+    bookingId: receipt.id,
+    totalPrice: Number(receipt.totalPrice),
+    paymentStatus: receipt.paymentStatus,
+    paymentMethod: paymentMethod === "cash" ? "Efectivo" : "Yape/Digital",
+    routeName: selectedTrip.route.name,
+    estimatedDurationMins: calcDurationMins() || undefined,
+  } : null;
 
   return (
     <div className="space-y-6">
@@ -391,17 +453,22 @@ export default function EmpresaAdminVentaPage() {
                 </div>
               </div>
 
-              {/* Recibo */}
+              {/* Recibo / Ticket */}
               {receipt && (
                 <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-emerald-400 font-bold">
                       <CheckCircle2 className="w-5 h-5" /> ¡Venta registrada!
                     </div>
-                    <button onClick={() => window.print()}
-                      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-lg transition-colors">
-                      <Printer className="w-3.5 h-3.5" /> Imprimir
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setTicketOpen(true)}
+                        className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-all hover:opacity-90 text-white"
+                        style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                      >
+                        <Ticket className="w-3.5 h-3.5" /> Ver Ticket
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
@@ -413,8 +480,8 @@ export default function EmpresaAdminVentaPage() {
                       <p className="text-emerald-400 font-bold text-lg">S/ {Number(receipt.totalPrice).toFixed(2)}</p>
                     </div>
                     <div>
-                      <p className="text-slate-500 text-xs">Estado</p>
-                      <p className="text-white text-sm">{receipt.paymentStatus}</p>
+                      <p className="text-slate-500 text-xs">Pasajero</p>
+                      <p className="text-white text-sm">{lastPassengerName}</p>
                     </div>
                     <div>
                       <p className="text-slate-500 text-xs">ID Reserva</p>
@@ -594,6 +661,17 @@ export default function EmpresaAdminVentaPage() {
           )}
         </div>
       </div>
+
+      {/* ── Ticket Modal ─────────────────────────────────────────────────── */}
+      {ticketData && (
+        <TicketModal
+          open={ticketOpen}
+          onClose={() => setTicketOpen(false)}
+          ticket={ticketData}
+          primaryColor={primaryColor}
+          secondaryColor={secondaryColor}
+        />
+      )}
     </div>
   );
 }

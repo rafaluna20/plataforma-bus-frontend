@@ -347,18 +347,24 @@ export default function TripDetailsPage() {
       {/* Ticket Modal */}
       {showTicketModal && bookingData && (
         <TicketModal
-          trip={{
-            origin: trip.origin,
-            destination: trip.destination,
-            company: trip.company,
-            duration: trip.duration,
-            departureTime: trip.departureTime,
-          }}
-          selectedSeats={bookingData.selectedSeats}
-          passengers={bookingData.passengers}
+          open={showTicketModal}
           onClose={() => {
             setShowTicketModal(false);
             router.push('/mis-viajes');
+          }}
+          ticket={{
+            companyName: trip.company,
+            origin: trip.origin,
+            destination: trip.destination,
+            departureTime: trip.departureTime,
+            passengerName: bookingData.passengers[0]?.nombre || user?.name || 'Pasajero',
+            passengerDoc: bookingData.passengers[0]?.dni || '',
+            seatId: bookingData.selectedSeats[0]?.id || '',
+            seatLabel: bookingData.selectedSeats[0]?.label || '',
+            bookingId: `BK-${Date.now()}`,
+            totalPrice: bookingData.selectedSeats.reduce((sum, s) => sum + (s.price || 0), 0),
+            paymentStatus: 'PAID',
+            routeName: `${trip.origin} - ${trip.destination}`,
           }}
         />
       )}

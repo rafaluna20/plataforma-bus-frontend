@@ -3,17 +3,20 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { authFetch } from "@/lib/auth";
 import TripCard from "@/components/trips/TripCard";
+import TicketModal from "@/components/trips/TicketModal";
+import StatCard from "@/components/dashboard/StatCard";
 import Link from "next/link";
 import {
   MapPin, Calendar, Search, ArrowRightLeft, Bus, Clock,
   Filter, CarFront, Car, WifiOff,
   Ticket, Wallet, ArrowRight, Sparkles, TrendingUp,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Package, QrCode, Award, Shield, Info
 } from "lucide-react";
 import type { Trip } from "@/types/booking";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { API_URL } from "@/lib/config";
 
 // ─── Destinos para el slider (Opción B) ──────────────────────────────────────
 const sliderDestinations = [
@@ -61,20 +64,21 @@ const sliderDestinations = [
   },
 ];
 
-// ─── Destinos populares (grid) ────────────────────────────────────────────────
-const popularDestinations = [
-  { city: "Ayacucho",      color: "from-blue-500 to-indigo-600" },
-  { city: "Cusco",         color: "from-violet-500 to-purple-600" },
-  { city: "Arequipa",      color: "from-orange-400 to-red-500" },
-  { city: "Huancavelica",  color: "from-emerald-400 to-teal-500" },
-  { city: "Tacna",         color: "from-cyan-400 to-blue-500" },
-  { city: "Acobamba",      color: "from-pink-500 to-rose-500" },
-];
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+
+  // ─── Pestaña del buscador ──────────────────────────────────────────────────
+  const [searchTab, setSearchTab] = useState<"pasajes" | "encomiendas">("pasajes");
+
+  // ─── Reserva próxima (Boleto Rápido) ───────────────────────────────────────
+  const [upcomingBooking, setUpcomingBooking] = useState<any>(null);
+  const [loadingBooking, setLoadingBooking] = useState(false);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+
+  // ─── Para el modal de ticket ────────────────────────────────────────────────
+  // (upcomingBooking se pasa directamente al nuevo TicketModal)
 
   // ─── Buscador ──────────────────────────────────────────────────────────────
   const [origin, setOrigin]           = useState("");
@@ -102,7 +106,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchInitialTrips = async () => {
       try {
-        const res = await fetch(`${API}/api/v1/trips/search?origin=&destination=&date=`);
+        const res = await fetch(`${API_URL}/api/v1/trips/search?origin=&destination=&date=`);
         const data = await res.json();
         if (res.ok && data.trips) {
           setResults(data.trips);
@@ -115,6 +119,53 @@ export default function HomePage() {
     fetchInitialTrips();
   }, []);
 
+  // ─── Cargar el próximo viaje activo del usuario logueado ──────────────────
+  useEffect(() => {
+    if (!user) {
+      setUpcomingBooking(null);
+      return;
+    }
+    const fetchUserBookings = async () => {
+      setLoadingBooking(true);
+      try {
+        const res = await authFetch(`${API_URL}/api/v1/bookings/my?page=1&limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.data && data.data.length > 0) {
+            const now = new Date();
+            // Buscar reservas futuras que estén pagadas o confirmadas
+            const validBookings = data.data.filter((b: any) => {
+              if (!b.trip?.departureTime) return false;
+              const depTime = new Date(b.trip.departureTime);
+              return depTime > now && (b.paymentStatus === 'PAID_DIGITAL' || b.paymentStatus === 'PENDING_CASH' || b.paymentStatus === 'PAID');
+            });
+            
+            if (validBookings.length > 0) {
+              // Ordenar por fecha de salida más cercana
+              validBookings.sort((a: any, b: any) => new Date(a.trip.departureTime).getTime() - new Date(b.trip.departureTime).getTime());
+              setUpcomingBooking(validBookings[0]);
+            } else {
+              setUpcomingBooking(null);
+            }
+          } else {
+            setUpcomingBooking(null);
+          }
+        }
+      } catch (err) {
+        console.error("Error al cargar reservas", err);
+      } finally {
+        setLoadingBooking(false);
+      }
+    };
+    fetchUserBookings();
+  }, [user]);
+
+  const handleOpenTicket = (booking: any) => {
+    if (!booking) return;
+    setShowTicketModal(true);
+  };
+
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -123,7 +174,7 @@ export default function HomePage() {
     setResults([]);
     try {
       const res = await fetch(
-        `${API}/api/v1/trips/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`
+        `${API_URL}/api/v1/trips/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al buscar viajes");
@@ -166,7 +217,7 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center w-full max-w-5xl mx-auto space-y-10 pb-20">
 
-      {/* ─── OPCIÓN A: Fondo animado global (fuera del hero para no ser cortado) ── */}
+      {/* ─── Fondo animado global ── */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
         <div className="absolute -top-32 -left-32 w-[500px] h-[500px] rounded-full animate-pulse"
           style={{ background: "radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 65%)", animationDuration: "4s" }} />
@@ -176,10 +227,8 @@ export default function HomePage() {
           style={{ background: "radial-gradient(circle, rgba(168,85,247,0.12) 0%, transparent 65%)", animationDuration: "5s", animationDelay: "3s" }} />
       </div>
 
-      {/* ─── HERO: Saludo + Buscador ──────────────────────────────────────── */}
+      {/* ─── HERO: Saludo ─── */}
       <div className="w-full pt-6 space-y-6 relative" style={{ zIndex: 1 }}>
-
-        {/* Saludo personalizado */}
         <div className="text-center space-y-2">
           {firstName ? (
             <>
@@ -201,81 +250,248 @@ export default function HomePage() {
             </>
           )}
         </div>
-
-        {/* Formulario de búsqueda */}
-        <form onSubmit={handleSearch}
-          className="w-full bg-slate-900/60 border border-white/10 rounded-2xl p-5 shadow-2xl backdrop-blur-sm space-y-4">
-
-          <div className="flex flex-col md:flex-row gap-3 items-center">
-            {/* Origen */}
-            <div className="relative flex-1 w-full">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
-              <input
-                value={origin}
-                onChange={e => setOrigin(e.target.value)}
-                placeholder="Ciudad de origen"
-                className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
-              />
-            </div>
-
-            {/* Swap */}
-            <button type="button" onClick={swapLocations}
-              className="p-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:border-indigo-500/50 transition-all hover:rotate-180 duration-300 shrink-0">
-              <ArrowRightLeft className="w-4 h-4" />
-            </button>
-
-            {/* Destino */}
-            <div className="relative flex-1 w-full">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400" />
-              <input
-                value={destination}
-                onChange={e => setDestination(e.target.value)}
-                placeholder="Ciudad de destino"
-                className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
-              />
-            </div>
-
-            {/* Fecha */}
-            <div className="relative w-full md:w-48 shrink-0">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                type="date"
-                value={date}
-                onChange={e => setDate(e.target.value)}
-                min={new Date().toISOString().split("T")[0]}
-                className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors [color-scheme:dark]"
-              />
-            </div>
-
-            {/* Botón buscar */}
-            <button type="submit" disabled={loading}
-              className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/25 shrink-0">
-              {loading
-                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                : <Search className="w-4 h-4" />}
-              {loading ? "Buscando..." : "Buscar"}
-            </button>
-          </div>
-
-          {/* Filtros rápidos */}
-          <div className="flex gap-2 flex-wrap">
-            {quickFilters.map(f => (
-              <button key={f.id} type="button" onClick={() => setVehicleFilter(f.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                  vehicleFilter === f.id
-                    ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
-                    : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
-                }`}>
-                {f.icon} {f.label}
-              </button>
-            ))}
-          </div>
-        </form>
       </div>
 
-      {/* ─── ACCESOS RÁPIDOS para usuario logueado (PASSENGER/DRIVER) ────── */}
+      {/* ─── BOLETO RÁPIDO: Próximo Viaje ─── */}
+      {user && upcomingBooking && (
+        <div className="w-full relative z-10 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="relative overflow-hidden rounded-3xl border border-indigo-500/30 bg-slate-900/60 backdrop-blur-xl p-6 shadow-2xl">
+            <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-transparent pointer-events-none" />
+            
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="space-y-4 flex-grow">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className="text-xs font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <QrCode className="w-3.5 h-3.5" /> Tu próximo viaje activo
+                  </p>
+                </div>
+                
+                <div className="flex items-center gap-5 flex-wrap">
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-extrabold">Origen</p>
+                    <p className="text-lg font-black text-white">
+                      {upcomingBooking.startWaypoint?.station?.city || upcomingBooking.trip?.route?.name?.split(' - ')[0]}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center justify-center text-indigo-400 px-1">
+                    <ArrowRight className="w-6 h-6" />
+                  </div>
+                  
+                  <div>
+                    <p className="text-[10px] text-slate-500 uppercase font-extrabold">Destino</p>
+                    <p className="text-lg font-black text-white">
+                      {upcomingBooking.endWaypoint?.station?.city || upcomingBooking.trip?.route?.name?.split(' - ')[1]}
+                    </p>
+                  </div>
+
+                  <div className="border-l border-white/10 pl-4">
+                    <p className="text-[10px] text-slate-500 uppercase font-extrabold">Salida</p>
+                    <p className="text-sm font-semibold text-slate-200">
+                      {new Date(upcomingBooking.trip?.departureTime).toLocaleDateString("es-PE", { day: 'numeric', month: 'short' })} • {new Date(upcomingBooking.trip?.departureTime).toLocaleTimeString("es-PE", { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+
+                  <div className="border-l border-white/10 pl-4">
+                    <p className="text-[10px] text-slate-500 uppercase font-extrabold">Asiento</p>
+                    <p className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-lg border border-emerald-500/20">
+                      {upcomingBooking.seatId}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row items-center gap-4 shrink-0">
+                <div className="text-center md:text-right">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${
+                    upcomingBooking.paymentStatus === 'PAID_DIGITAL' || upcomingBooking.paymentStatus === 'PAID'
+                      ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                      : 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                  }`}>
+                    {upcomingBooking.paymentStatus === 'PAID_DIGITAL' || upcomingBooking.paymentStatus === 'PAID' ? '✓ PAGADO' : '● PAGO AL ABORDAR'}
+                  </span>
+                  <p className="text-[10px] text-slate-400 mt-1.5 font-medium">{upcomingBooking.passengerName}</p>
+                </div>
+                
+                <button
+                  onClick={() => handleOpenTicket(upcomingBooking)}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-black rounded-xl transition-all shadow-lg shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
+                >
+                  <QrCode className="w-4 h-4" />
+                  Ver Ticket QR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── BUSCADOR RÁPIDO CON PESTAÑAS (TABS) ─── */}
+      <div className="w-full relative z-10" style={{ zIndex: 1 }}>
+        <div className="w-full bg-slate-900/60 border border-white/10 rounded-3xl p-6 shadow-2xl backdrop-blur-md space-y-5">
+          
+          {/* Tabs */}
+          <div className="flex border-b border-white/5 pb-3 gap-6">
+            <button
+              type="button"
+              onClick={() => setSearchTab("pasajes")}
+              className={`flex items-center gap-2 pb-2 text-sm font-bold border-b-2 transition-all relative ${
+                searchTab === "pasajes"
+                  ? "border-indigo-500 text-white"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Ticket className="w-4 h-4 text-indigo-400" />
+              Pasajes
+            </button>
+            <button
+              type="button"
+              onClick={() => setSearchTab("encomiendas")}
+              className={`flex items-center gap-2 pb-2 text-sm font-bold border-b-2 transition-all relative ${
+                searchTab === "encomiendas"
+                  ? "border-cyan-500 text-white"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Package className="w-4 h-4 text-cyan-400" />
+              Encomiendas
+            </button>
+          </div>
+
+          {searchTab === "pasajes" ? (
+            <form onSubmit={handleSearch} className="space-y-4">
+              <div className="flex flex-col md:flex-row gap-3 items-center">
+                {/* Origen */}
+                <div className="relative flex-1 w-full">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400" />
+                  <input
+                    value={origin}
+                    onChange={e => setOrigin(e.target.value)}
+                    placeholder="¿De dónde sales? (Ej: Lima)"
+                    className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                  />
+                </div>
+
+                {/* Swap */}
+                <button type="button" onClick={swapLocations}
+                  className="p-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:border-indigo-500/50 transition-all hover:rotate-180 duration-300 shrink-0">
+                  <ArrowRightLeft className="w-4 h-4" />
+                </button>
+
+                {/* Destino */}
+                <div className="relative flex-1 w-full">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cyan-400" />
+                  <input
+                    value={destination}
+                    onChange={e => setDestination(e.target.value)}
+                    placeholder="¿A dónde vas? (Ej: Cusco)"
+                    className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+                  />
+                </div>
+
+                {/* Fecha */}
+                <div className="relative w-full md:w-48 shrink-0">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                    min={new Date().toISOString().split("T")[0]}
+                    className="w-full pl-9 pr-4 py-3 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 transition-colors [color-scheme:dark]"
+                  />
+                </div>
+
+                {/* Botón buscar */}
+                <button type="submit" disabled={loading}
+                  className="w-full md:w-auto px-8 py-3 bg-gradient-to-r from-indigo-500 to-cyan-500 hover:from-indigo-600 hover:to-cyan-600 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/25 shrink-0">
+                  {loading
+                    ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : <Search className="w-4 h-4" />}
+                  {loading ? "Buscando..." : "Buscar"}
+                </button>
+              </div>
+
+              {/* Filtros rápidos */}
+              <div className="flex gap-2 flex-wrap pt-2">
+                {quickFilters.map(f => (
+                  <button key={f.id} type="button" onClick={() => setVehicleFilter(f.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                      vehicleFilter === f.id
+                        ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
+                        : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                    }`}>
+                    {f.icon} {f.label}
+                  </button>
+                ))}
+              </div>
+            </form>
+          ) : (
+            <div className="py-2 space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-start gap-3 p-4 bg-cyan-500/10 border border-cyan-500/20 rounded-2xl text-cyan-300 text-sm">
+                <Info className="w-5 h-5 shrink-0 text-cyan-400" />
+                <div>
+                  <p className="font-bold">Envío de Encomiendas Online próximamente</p>
+                  <p className="text-slate-400 mt-1">Estamos integrando el sistema para registrar, cotizar y hacer el seguimiento satelital de tus paquetes interprovinciales.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl space-y-2">
+                  <h4 className="text-white text-sm font-bold flex items-center gap-1.5">
+                    <Shield className="w-4 h-4 text-cyan-400" />
+                    Envíos Físicos Activos
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Puedes acudir a cualquiera de nuestras agencias terminales físicas. Todos tus paquetes viajan asegurados y son monitoreados vía GPS en el vehículo de la ruta.
+                  </p>
+                </div>
+
+                <div className="bg-slate-800/40 border border-slate-700/50 p-4 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <h4 className="text-white text-sm font-bold">Cotizaciones y Soporte</h4>
+                    <p className="text-xs text-slate-400 mt-1">Llama a nuestra central para cotizar tu carga o consultar estado de guías:</p>
+                  </div>
+                  <p className="text-sm font-black text-cyan-400 mt-3 flex items-center gap-1.5">
+                    📞 (01) 555-1234
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── ESTADÍSTICAS COMPACTAS (Para usuario logueado) ─── */}
+      {user && (
+        <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10 animate-in fade-in duration-500">
+          <StatCard
+            title="Saldo Disponible"
+            value={`S/ ${user.balance?.toFixed(2) || "0.00"}`}
+            subtitle="Billetera"
+            icon={<Wallet className="w-5 h-5 text-indigo-400" />}
+            gradient="from-indigo-500/10 to-purple-500/10"
+          />
+          <StatCard
+            title="Viajes Completados"
+            value={5}
+            subtitle="Historial"
+            icon={<Award className="w-5 h-5 text-emerald-400" />}
+            gradient="from-emerald-500/10 to-teal-500/10"
+          />
+          <StatCard
+            title="Nivel de Viajero"
+            value="Socio VIP"
+            subtitle="Plata"
+            icon={<Sparkles className="w-5 h-5 text-cyan-400" />}
+            gradient="from-cyan-500/10 to-blue-500/10"
+          />
+        </div>
+      )}
+
+      {/* ─── ACCESOS RÁPIDOS ────── */}
       {user && (user.role === "PASSENGER" || user.role === "DRIVER") && (
-        <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="w-full grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
           <QuickLink href="/reservas"  icon={<Ticket className="w-5 h-5 text-emerald-400" />}  label="Mis Reservas"  />
           <QuickLink href="/billetera" icon={<Wallet className="w-5 h-5 text-indigo-400" />}   label="Billetera"     />
           <QuickLink href="/mis-viajes" icon={<Clock className="w-5 h-5 text-cyan-400" />}     label="Mis Viajes"    />
@@ -287,27 +503,27 @@ export default function HomePage() {
 
       {/* ─── RESULTADOS ───────────────────────────────────────────────────── */}
       {networkError && (
-        <div className="w-full flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-sm">
+        <div className="w-full flex items-center gap-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-sm relative z-10">
           <WifiOff className="w-5 h-5 shrink-0" />
           <span>Sin conexión al servidor. Los viajes se mostrarán cuando el backend esté disponible.</span>
         </div>
       )}
 
       {error && !networkError && (
-        <div className="w-full p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+        <div className="w-full p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm relative z-10">
           {error}
         </div>
       )}
 
       {loading && (
-        <div className="w-full flex flex-col items-center gap-4 py-12">
+        <div className="w-full flex flex-col items-center gap-4 py-12 relative z-10">
           <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-slate-400 text-sm">Buscando los mejores viajes...</p>
         </div>
       )}
 
       {!loading && filteredResults.length > 0 && (
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-4 relative z-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-indigo-400" />
@@ -328,7 +544,7 @@ export default function HomePage() {
       )}
 
       {!loading && hasSearched && filteredResults.length === 0 && !error && (
-        <div className="w-full flex flex-col items-center gap-4 py-16 text-center">
+        <div className="w-full flex flex-col items-center gap-4 py-16 text-center relative z-10">
           <div className="p-4 bg-slate-800/50 rounded-2xl border border-white/5">
             <Bus className="w-10 h-10 text-slate-600" />
           </div>
@@ -337,16 +553,18 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ─── OPCIÓN B: Slider de destinos ────────────────────────────────── */}
+      {/* ─── SLIDER DE DESTINOS POPULARES ────────────────────────────────── */}
       {!hasSearched && !loading && (
-        <DestinationSlider
-          onSelect={(city) => setDestination(city)}
-        />
+        <div className="w-full relative z-10">
+          <DestinationSlider
+            onSelect={(city) => setDestination(city)}
+          />
+        </div>
       )}
 
       {/* ─── CTA para usuarios no logueados ──────────────────────────────── */}
       {!authLoading && !user && (
-        <div className="w-full bg-gradient-to-r from-indigo-500/10 to-cyan-500/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="w-full bg-gradient-to-r from-indigo-500/10 to-cyan-500/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 relative z-10">
           <div>
             <h3 className="text-white font-bold text-lg">¿Eres empresa de transporte?</h3>
             <p className="text-slate-400 text-sm mt-1">Registra tu empresa y gestiona tus rutas y vehículos</p>
@@ -362,6 +580,27 @@ export default function HomePage() {
             </Link>
           </div>
         </div>
+      )}
+
+      {/* ─── MODAL TICKET QR ────────────────────────────────────────────────── */}
+      {showTicketModal && upcomingBooking && (
+        <TicketModal
+          open={showTicketModal}
+          onClose={() => setShowTicketModal(false)}
+          ticket={{
+            companyName: upcomingBooking.trip?.route?.company?.tradeName || 'Transporte',
+            origin: upcomingBooking.startWaypoint?.station?.city || upcomingBooking.trip?.route?.name?.split(' - ')[0] || 'Origen',
+            destination: upcomingBooking.endWaypoint?.station?.city || upcomingBooking.trip?.route?.name?.split(' - ')[1] || 'Destino',
+            departureTime: upcomingBooking.trip?.departureTime || new Date().toISOString(),
+            passengerName: upcomingBooking.passengerName || user?.name || 'Pasajero',
+            passengerDoc: upcomingBooking.passengerDocNum || '',
+            seatId: upcomingBooking.seatId || '',
+            bookingId: upcomingBooking.id || 'BK-0',
+            totalPrice: Number(upcomingBooking.totalPrice) || 0,
+            paymentStatus: upcomingBooking.paymentStatus || 'PENDING',
+            routeName: upcomingBooking.trip?.route?.name,
+          }}
+        />
       )}
 
     </div>
@@ -411,7 +650,7 @@ function DestinationSlider({ onSelect }: { onSelect: (city: string) => void }) {
   return (
     <div className="w-full space-y-3">
       <h2 className="text-lg font-bold text-white flex items-center gap-2">
-        <MapPin className="w-5 h-5 text-cyan-400" /> Destinos populares
+        <MapPin className="w-5 h-5 text-cyan-400" /> Salidas populares desde Lima
       </h2>
 
       {/* Slide principal */}
@@ -437,7 +676,7 @@ function DestinationSlider({ onSelect }: { onSelect: (city: string) => void }) {
             <h3 className="text-white text-2xl font-extrabold">{slide.city}</h3>
             <p className="text-white/80 text-sm mt-0.5">{slide.desc}</p>
             <div className="mt-3 inline-flex items-center gap-1.5 text-white/90 text-xs font-semibold bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/20 group-hover:bg-white/20 transition-colors">
-              <Search className="w-3 h-3" /> Buscar viajes a {slide.city}
+              <Search className="w-3 h-3" /> Ver salidas a {slide.city}
             </div>
           </div>
         </div>

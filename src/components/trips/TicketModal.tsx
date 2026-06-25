@@ -1,196 +1,256 @@
 "use client";
 
-import { Printer, X, CheckCircle2 } from "lucide-react";
-import type { Seat, Passenger, TripSummary } from "@/types/booking";
+import { useRef } from "react";
+import { X, Printer } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
-interface TicketModalProps {
-  trip: TripSummary;
-  selectedSeats: Seat[];
-  passengers: Passenger[];
+type TicketData = {
+  // Empresa
+  companyName: string;
+  companyRuc?: string;
+  companyLogoUrl?: string;
+  // Viaje
+  origin: string;
+  destination: string;
+  departureTime: string; // ISO string
+  // Pasajero
+  passengerName: string;
+  passengerDoc: string;
+  seatId: string;
+  seatLabel?: string;
+  // Reserva
+  bookingId: string;
+  totalPrice: number;
+  paymentStatus: string;
+  paymentMethod?: string;
+  // Ruta
+  routeName?: string;
+  estimatedDurationMins?: number;
+  estimatedDistanceKm?: number;
+};
+
+type TicketModalProps = {
+  open: boolean;
   onClose: () => void;
-}
+  ticket: TicketData;
+  primaryColor?: string;
+  secondaryColor?: string;
+};
 
-const RUC = "20155555555";
-const ESTIMATED_KM = 154;
+export default function TicketModal({
+  open, onClose, ticket, primaryColor = "#6366f1", secondaryColor = "#8b5cf6",
+}: TicketModalProps) {
+  const printRef = useRef<HTMLDivElement>(null);
 
-export default function TicketModal({ trip, selectedSeats, passengers, onClose }: TicketModalProps) {
-  const departureDate = new Date(trip.departureTime);
-  const dateStr = departureDate.toLocaleDateString("es-PE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
+  if (!open) return null;
+
+  const dep = new Date(ticket.departureTime);
+  const dateStr = dep.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const timeStr = dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+
+  // Datos para el QR
+  const qrData = JSON.stringify({
+    id: ticket.bookingId,
+    seat: ticket.seatId,
+    passenger: ticket.passengerName,
+    origin: ticket.origin,
+    destination: ticket.destination,
+    date: dateStr,
+    time: timeStr,
   });
-  const timeStr = departureDate.toLocaleTimeString("es-PE", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 
-  // Generate a unique booking ID for this ticket
-  const bookingId = `TKT-${Date.now().toString(36).toUpperCase()}`;
+  function handlePrint() {
+    const printContent = printRef.current;
+    if (!printContent) return;
+    const win = window.open("", "_blank", "width=600,height=800");
+    if (!win) return;
+    win.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Ticket - ${ticket.passengerName}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; }
+            .ticket { max-width: 420px; margin: 20px auto; border: 2px solid #3b82f6; border-radius: 12px; overflow: hidden; background: #fff; }
+            .ticket-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e2e8f0; }
+            .company-logo { height: 48px; object-fit: contain; }
+            .company-name { font-size: 22px; font-weight: 900; color: #1e293b; }
+            .ruc { font-size: 16px; font-weight: 700; color: #475569; }
+            .ticket-body { padding: 20px 24px; }
+            .field { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+            .field-label { font-size: 15px; font-weight: 700; color: #1e293b; min-width: 80px; }
+            .field-value { font-size: 14px; color: #475569; }
+            .field-inline { display: flex; gap: 24px; margin-bottom: 12px; }
+            .qr-section { display: flex; justify-content: flex-start; padding: 16px 0; }
+            .terms { border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 8px; }
+            .terms-title { font-size: 13px; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+            .terms-text { font-size: 12px; color: #64748b; line-height: 1.5; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); win.close(); }, 500);
+  }
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const seatDisplay = ticket.seatLabel || ticket.seatId.replace(/\D/g, "");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="w-full max-w-4xl bg-[#e5e7eb] rounded-2xl shadow-2xl overflow-hidden my-auto">
-        
-        {/* Header de control */}
-        <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between print:hidden">
-          <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-            <div>
-              <p className="font-bold text-slate-800">¡Pago Confirmado!</p>
-              <p className="text-xs text-slate-500">Tu reserva ha sido procesada exitosamente.</p>
-            </div>
-          </div>
+    <div
+      className="fixed inset-0 z-[300] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md flex flex-col gap-3">
+
+        {/* Botones de acción */}
+        <div className="flex items-center justify-between">
+          <h2 className="text-white font-bold text-base flex items-center gap-2">
+            🎫 Ticket de Pasaje
+          </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-bold transition-all hover:opacity-90"
+              style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
             >
-              <Printer className="w-4 h-4" />
-              Imprimir Ticket
+              <Printer className="w-3.5 h-3.5" />
+              Imprimir
             </button>
             <button
               onClick={onClose}
-              className="text-slate-400 hover:text-slate-700 transition p-2"
+              className="p-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-white transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Tickets — uno por pasajero */}
-        <div className="p-6 space-y-6 print:p-0 print:space-y-0">
-          {passengers.map((passenger, idx) => {
-            const seat = selectedSeats.find(s => s.id === passenger.seatId);
-            // QR data in JSON format for proper machine-readable validation
-            const qrPayload = JSON.stringify({
-              bookingId,
-              origin: trip.origin,
-              destination: trip.destination,
-              date: dateStr,
-              time: timeStr,
-              seat: seat?.label,
-              passenger: passenger.nombre,
-              dni: passenger.dni,
-            });
-            const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrPayload)}`;
+        {/* Ticket */}
+        <div
+          ref={printRef}
+          className="ticket bg-white rounded-2xl overflow-hidden shadow-2xl"
+          style={{ border: "2px solid #3b82f6" }}
+        >
+          {/* Header: Logo + RUC */}
+          <div className="ticket-header flex items-center justify-between px-5 py-4 border-b border-slate-200">
+            <div className="flex items-center gap-3">
+              {ticket.companyLogoUrl ? (
+                <img
+                  src={ticket.companyLogoUrl}
+                  alt={ticket.companyName}
+                  className="company-logo h-12 object-contain"
+                  style={{ maxWidth: 120 }}
+                />
+              ) : (
+                <span className="company-name text-2xl font-black text-slate-800">
+                  {ticket.companyName}
+                </span>
+              )}
+            </div>
+            <div className="text-right">
+              {ticket.companyRuc && (
+                <p className="ruc text-base font-bold text-slate-600">
+                  RUC:{ticket.companyRuc}
+                </p>
+              )}
+            </div>
+          </div>
 
-            return (
-              <div
-                key={passenger.seatId}
-                className="bg-white rounded-2xl shadow-lg overflow-hidden max-w-sm mx-auto print:shadow-none print:rounded-none print:max-w-full"
-              >
-                {/* Encabezado del Ticket */}
-                <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-                  {/* Logo */}
-                  <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center">
-                      <span className="text-white font-black text-[10px] leading-none text-center">
-                        AN<br/>TE
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-black text-slate-800 text-base leading-none">Antezana</p>
-                      <p className="text-slate-400 text-[9px] leading-none mt-0.5">{trip.company}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-500">RUC:{RUC}</p>
-                  </div>
-                </div>
+          {/* Body */}
+          <div className="ticket-body px-6 py-5 space-y-3">
 
-                {/* Cuerpo del Ticket */}
-                <div className="px-8 py-5 space-y-3">
-                  {[
-                    { label: "Origen:", value: trip.origin.toLowerCase() },
-                    { label: "Destino:", value: trip.destination.toLowerCase() },
-                    { label: "Fecha:", value: dateStr },
-                    { label: "Hora:", value: timeStr },
-                    {
-                      label: "Asiento:",
-                      value: `${seat?.label ?? "—"} ventana`,
-                    },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex gap-4 text-sm">
-                      <span className="font-bold text-slate-800 w-20 shrink-0">{label}</span>
-                      <span className="text-slate-600">{value}</span>
-                    </div>
-                  ))}
+            {/* Origen */}
+            <div className="field flex items-baseline gap-2">
+              <span className="field-label text-sm font-bold text-slate-800 w-24 flex-shrink-0">Origen:</span>
+              <span className="field-value text-sm text-slate-600">{ticket.origin.toLowerCase()}</span>
+            </div>
 
-                  <div className="flex gap-4 text-sm">
-                    <span className="font-bold text-slate-800 w-20 shrink-0">Tiempo Aprox</span>
-                    <span className="text-slate-600">
-                      {trip.duration} &nbsp;&nbsp;
-                      <span className="font-bold text-slate-800">Distancia Aprox</span>
-                      &nbsp; {ESTIMATED_KM} km
-                    </span>
-                  </div>
+            {/* Destino */}
+            <div className="field flex items-baseline gap-2">
+              <span className="field-label text-sm font-bold text-slate-800 w-24 flex-shrink-0">Destino:</span>
+              <span className="field-value text-sm text-slate-600">{ticket.destination.toLowerCase()}</span>
+            </div>
 
-                  <div className="flex gap-4 text-sm">
-                    <span className="font-bold text-slate-800 w-20 shrink-0">Pasajero:</span>
-                    <span className="text-slate-600">
-                      {passenger.nombre || "Sin Nombre"}
-                    </span>
-                  </div>
-                </div>
-
-                {/* QR Code */}
-                <div className="flex justify-center py-4 border-t border-dashed border-slate-200">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={qrUrl}
-                    alt="QR Code del Ticket"
-                    width={130}
-                    height={130}
-                    className="rounded"
-                  />
-                </div>
-
-                {/* Términos */}
-                <div className="px-8 pb-6 border-t border-dashed border-slate-200 pt-4">
-                  <p className="font-bold text-slate-800 text-sm mb-2">Terminos y condiciones:</p>
-                  <p className="text-[11px] text-slate-600 leading-relaxed mb-3">
-                    Aceptas las condiciones del uso del servicio de este vehículo y los adicionales
-                  </p>
-                  <ul className="space-y-1">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <li key={i} className="flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Borde inferior decorativo */}
-                <div className="h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+            {/* Fecha + Hora */}
+            <div className="field-inline flex items-baseline gap-6">
+              <div className="flex items-baseline gap-2">
+                <span className="field-label text-sm font-bold text-slate-800">Fecha:</span>
+                <span className="field-value text-sm text-slate-600">{dateStr}</span>
               </div>
-            );
-          })}
+              <div className="flex items-baseline gap-2">
+                <span className="field-label text-sm font-bold text-slate-800">Hora:</span>
+                <span className="field-value text-sm text-slate-600">{timeStr}</span>
+              </div>
+            </div>
+
+            {/* Asiento */}
+            <div className="field flex items-baseline gap-2">
+              <span className="field-label text-sm font-bold text-slate-800 w-24 flex-shrink-0">Asiento:</span>
+              <span className="field-value text-sm text-slate-600">{seatDisplay}</span>
+            </div>
+
+            {/* Tiempo y Distancia */}
+            {(ticket.estimatedDurationMins || ticket.estimatedDistanceKm) && (
+              <div className="field-inline flex items-baseline gap-6">
+                {ticket.estimatedDurationMins && (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-bold text-slate-800">Tiempo Aprox:</span>
+                    <span className="text-sm text-slate-600">
+                      {ticket.estimatedDurationMins >= 60
+                        ? `${Math.floor(ticket.estimatedDurationMins / 60)} horas`
+                        : `${ticket.estimatedDurationMins} min`}
+                    </span>
+                  </div>
+                )}
+                {ticket.estimatedDistanceKm && (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm font-bold text-slate-800">Distancia Aprox:</span>
+                    <span className="text-sm text-slate-600">{ticket.estimatedDistanceKm} km</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pasajero */}
+            <div className="field flex items-baseline gap-2">
+              <span className="field-label text-sm font-bold text-slate-800 w-24 flex-shrink-0">Pasajero:</span>
+              <span className="field-value text-sm text-slate-600">{ticket.passengerName}</span>
+            </div>
+
+            {/* QR Code */}
+            <div className="qr-section py-4">
+              <QRCodeSVG
+                value={qrData}
+                size={140}
+                bgColor="#ffffff"
+                fgColor="#000000"
+                level="M"
+              />
+            </div>
+
+            {/* Términos y condiciones */}
+            <div className="terms border-t border-slate-200 pt-4">
+              <p className="terms-title text-sm font-bold text-slate-800 mb-1">Terminos y condiciones:</p>
+              <p className="terms-text text-xs text-slate-500 leading-relaxed">
+                Aceptas las condiciones del uso del servicio de este vehiculo y los adicionales
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Botones finales */}
-        <div className="px-6 pb-8 flex flex-col items-center gap-3 print:hidden">
-          <button
-            onClick={handlePrint}
-            className="w-full max-w-sm py-3 rounded-xl font-black text-white flex items-center justify-center gap-2 transition hover:scale-[1.02]"
-            style={{
-              background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-              boxShadow: "0 8px 25px rgba(124,58,237,0.4)",
-            }}
-          >
-            <Printer className="w-5 h-5" />
-            IMPRIMIR TICKET(S)
-          </button>
-          <button
-            onClick={onClose}
-            className="text-slate-500 text-sm hover:text-slate-700 underline transition"
-          >
-            Ir a Mis Viajes
-          </button>
+        {/* Info adicional debajo del ticket */}
+        <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+          <span>ID: {ticket.bookingId.slice(0, 16)}...</span>
+          <span className="font-bold" style={{ color: "#10b981" }}>
+            S/ {ticket.totalPrice.toFixed(2)} — {ticket.paymentStatus === "PENDING_CASH" ? "Pago al abordar" : "Pagado"}
+          </span>
         </div>
       </div>
     </div>
