@@ -4,12 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Building2, Palette, Phone, Globe, MapPin, Mail,
-  Save, CheckCircle2, AlertCircle, RefreshCw, Eye, Upload
+  Save, CheckCircle2, AlertCircle, RefreshCw, Eye, Upload,
+  ExternalLink, Copy, Link2, CheckCheck
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import ImageUploader from "@/components/ui/ImageUploader";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || (typeof window !== "undefined" ? window.location.origin : "https://plataforma-bus-frontend.vercel.app");
 
 type CompanyBranding = {
   id: string;
@@ -38,6 +40,8 @@ export default function EmpresaBrandingPage() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"identidad" | "contacto" | "preview">("identidad");
+  const [copied, setCopied] = useState(false);
+  const [savedSlug, setSavedSlug] = useState(""); // slug que está guardado en el servidor
 
   const [form, setForm] = useState({
     slug: "",
@@ -66,6 +70,7 @@ export default function EmpresaBrandingPage() {
       if (!res.ok) throw new Error(data.error || "Error al cargar branding");
       const c: CompanyBranding = data.company;
       setCompany(c);
+      setSavedSlug(c.slug || "");
       setForm({
         slug: c.slug || "",
         logoUrl: c.logoUrl || "",
@@ -85,6 +90,16 @@ export default function EmpresaBrandingPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function copyPublicUrl() {
+    const slug = form.slug || company?.id;
+    if (!slug) return;
+    const url = `${APP_URL}/empresa/${slug}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
   }
 
   async function saveBranding(e: React.FormEvent) {
@@ -111,6 +126,7 @@ export default function EmpresaBrandingPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al guardar");
       setCompany(data.company);
+      setSavedSlug(data.company.slug || ""); // actualizar slug guardado
       setSuccess("✅ Branding actualizado exitosamente");
       setTimeout(() => setSuccess(""), 4000);
     } catch (e: any) {
@@ -183,14 +199,16 @@ export default function EmpresaBrandingPage() {
               <Palette className="w-5 h-5 text-indigo-400" /> Identidad Visual
             </h2>
 
-            {/* Slug */}
-            <div>
-              <label className="text-xs text-slate-400 mb-1.5 block font-medium">
+            {/* Slug + Preview Link */}
+            <div className="space-y-3">
+              <label className="text-xs text-slate-400 font-medium block">
                 URL Amigable (slug) *
               </label>
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500 text-sm bg-slate-800 border border-slate-700 rounded-l-xl px-3 py-2.5 border-r-0">
-                  transporte.pe/empresa/
+
+              {/* Input del slug */}
+              <div className="flex items-center gap-0">
+                <span className="text-slate-500 text-xs bg-slate-800 border border-slate-700 rounded-l-xl px-3 py-2.5 border-r-0 whitespace-nowrap flex-shrink-0">
+                  /empresa/
                 </span>
                 <input
                   value={form.slug}
@@ -199,7 +217,71 @@ export default function EmpresaBrandingPage() {
                   className="flex-1 bg-slate-800 border border-slate-700 rounded-r-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
                 />
               </div>
-              <p className="text-xs text-slate-600 mt-1">Solo letras minúsculas, números y guiones. Ej: transportes-flash</p>
+              <p className="text-xs text-slate-600">Solo letras minúsculas, números y guiones. Ej: transportes-flash</p>
+
+              {/* Bloque de acceso directo — visible cuando hay slug */}
+              {(form.slug || company?.id) && (
+                <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Link2 className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Tu página pública</span>
+                    {/* Indicador: guardado vs. cambio pendiente */}
+                    {form.slug && form.slug !== savedSlug ? (
+                      <span className="ml-auto flex items-center gap-1 text-xs text-amber-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        Sin guardar
+                      </span>
+                    ) : savedSlug ? (
+                      <span className="ml-auto flex items-center gap-1 text-xs text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        En vivo
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* URL completa */}
+                  <div className="flex items-center gap-2 bg-slate-900/70 rounded-lg px-3 py-2 border border-slate-700/50">
+                    <span className="text-xs text-slate-400 truncate flex-1 font-mono">
+                      {APP_URL}/empresa/<span className="text-indigo-300 font-semibold">{form.slug || company?.id}</span>
+                    </span>
+                    {/* Copiar */}
+                    <button
+                      type="button"
+                      onClick={copyPublicUrl}
+                      title="Copiar URL"
+                      className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition-all"
+                    >
+                      {copied
+                        ? <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                        : <Copy className="w-3.5 h-3.5" />}
+                    </button>
+                    {/* Abrir en nueva pestaña */}
+                    <a
+                      href={`${APP_URL}/empresa/${form.slug || company?.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Abrir página pública"
+                      className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+
+                  {/* Botón grande de acceso directo */}
+                  <a
+                    href={`${APP_URL}/empresa/${form.slug || company?.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-all
+                      bg-gradient-to-r from-indigo-500/20 to-purple-500/20 text-indigo-300 border border-indigo-500/30
+                      hover:from-indigo-500/30 hover:to-purple-500/30 hover:text-white hover:border-indigo-400/50"
+                  >
+                    <Eye className="w-4 h-4" />
+                    Ver mi página pública
+                    <ExternalLink className="w-3.5 h-3.5 opacity-60" />
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Logo — ImageUploader */}
