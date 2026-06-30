@@ -21,6 +21,31 @@ export default function TripCard({ trip, originName, destinationName, variant = 
     const router = useRouter();
     const [isBookmarked, setIsBookmarked] = useState(false);
 
+    // Dynamic resolution of origin and destination cities
+    const realOrigin = useMemo(() => {
+        if (originName && originName.toLowerCase() !== "origen" && originName.trim() !== "") {
+            return originName;
+        }
+        const wps = trip.route?.waypoints || [];
+        if (wps.length > 0) {
+            const sorted = [...wps].sort((a: any, b: any) => a.stopOrder - b.stopOrder);
+            return sorted[0]?.station?.city || sorted[0]?.station?.name || "Origen";
+        }
+        return trip.origin || "Origen";
+    }, [trip.route?.waypoints, originName, trip.origin]);
+
+    const realDestination = useMemo(() => {
+        if (destinationName && destinationName.toLowerCase() !== "destino" && destinationName.trim() !== "") {
+            return destinationName;
+        }
+        const wps = trip.route?.waypoints || [];
+        if (wps.length > 0) {
+            const sorted = [...wps].sort((a: any, b: any) => a.stopOrder - b.stopOrder);
+            return sorted[sorted.length - 1]?.station?.city || sorted[sorted.length - 1]?.station?.name || "Destino";
+        }
+        return trip.destination || "Destino";
+    }, [trip.route?.waypoints, destinationName, trip.destination]);
+
     // Simulated Stable Mocks based on ID
     // We generate pseudo-random but stable numbers from the trip ID to simulate data
     const hash = useMemo(() => {
@@ -64,14 +89,13 @@ export default function TripCard({ trip, originName, destinationName, variant = 
 
     // Images 
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
-    // In a real app we'd have trip.images or vehicle images. We'll use placeholder gradients for now.
     const images = ['fallback']; 
 
     // Calculation for Price
     let finalPrice = trip.route?.waypoints?.[trip.route.waypoints.length - 1]?.basePrice || 45;
     if (trip.route?.waypoints?.length > 0) {
-        const start = trip.route.waypoints.find((w: any) => w.station?.city.toLowerCase() === originName.toLowerCase());
-        const end = trip.route.waypoints.find((w: any) => w.station?.city.toLowerCase() === destinationName.toLowerCase());
+        const start = trip.route.waypoints.find((w: any) => w.station?.city?.toLowerCase() === realOrigin.toLowerCase());
+        const end = trip.route.waypoints.find((w: any) => w.station?.city?.toLowerCase() === realDestination.toLowerCase());
         if (start && end && end.stopOrder > start.stopOrder) {
             finalPrice = trip.route.waypoints.filter((w: any) => w.stopOrder > start.stopOrder && w.stopOrder <= end.stopOrder).reduce((acc: any, curr: any) => acc + curr.basePrice, 0);
         }
@@ -105,6 +129,11 @@ export default function TripCard({ trip, originName, destinationName, variant = 
 
     const vehicleTypeStr = trip.vehicle?.vehicleType?.toLowerCase() || 'bus';
 
+    // Extracted company details
+    const companyLogo = trip.route?.company?.logoUrl || trip.company?.logoUrl;
+    const companyName = trip.route?.company?.tradeName || trip.company?.tradeName || "Transportista";
+    const headerImage = trip.vehicle?.imageUrl || trip.route?.company?.bannerUrl;
+
     return (
         <div className="block h-full cursor-pointer" onClick={handleSelectClick}>
             <article className={`
@@ -127,12 +156,20 @@ export default function TripCard({ trip, originName, destinationName, variant = 
 
                 {/* ── Imagen / Encabezado ── */}
                 <div className={`relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 flex-shrink-0 ${isFeaturedCard ? 'h-72' : 'h-48'}`}>
-                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-800">
-                        {vehicleTypeStr === 'minivan' ? <CarFront size={48} className="opacity-50" /> : 
-                         vehicleTypeStr === 'auto' ? <Car size={48} className="opacity-50" /> : 
-                         <Bus size={48} className="opacity-50" />}
-                        <span className="text-sm font-bold text-slate-500 mt-2 tracking-widest uppercase">{trip.vehicle?.vehicleType || 'Bus'}</span>
-                    </div>
+                    {headerImage ? (
+                        <img 
+                            src={headerImage} 
+                            alt={trip.vehicle?.plateNumber || companyName}
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-600 bg-slate-800">
+                            {vehicleTypeStr === 'minivan' ? <CarFront size={48} className="opacity-50" /> : 
+                             vehicleTypeStr === 'auto' ? <Car size={48} className="opacity-50" /> : 
+                             <Bus size={48} className="opacity-50" />}
+                            <span className="text-sm font-bold text-slate-500 mt-2 tracking-widest uppercase">{trip.vehicle?.vehicleType || 'Bus'}</span>
+                        </div>
+                    )}
 
                     {/* Badges */}
                     <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
@@ -146,7 +183,16 @@ export default function TripCard({ trip, originName, destinationName, variant = 
                         {/* Sub-badges */}
                         <div className="flex gap-1.5 flex-wrap">
                             {isPopular && <span className="px-2 py-0.5 bg-slate-900/80 text-orange-400 border border-orange-500/30 text-[9px] font-bold rounded-full backdrop-blur-sm">🔥 DEMANDADO</span>}
-                            <span className="px-2 py-0.5 bg-slate-900/80 text-indigo-300 border border-indigo-500/20 text-[9px] font-bold rounded-full backdrop-blur-sm uppercase">{trip.company?.tradeName || "Transportista"}</span>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-slate-900/80 text-indigo-300 border border-indigo-500/20 text-[9px] font-bold rounded-full backdrop-blur-sm uppercase">
+                                {companyLogo && (
+                                    <img 
+                                        src={companyLogo} 
+                                        alt={companyName} 
+                                        className="w-3.5 h-3.5 rounded-full object-cover bg-white/20 p-0.5" 
+                                    />
+                                )}
+                                {companyName}
+                            </span>
                         </div>
                     </div>
 
@@ -161,7 +207,7 @@ export default function TripCard({ trip, originName, destinationName, variant = 
                     <div className="flex justify-between items-start">
                         <div>
                             <h3 className={`font-bold text-white leading-snug line-clamp-2 group-hover:text-indigo-400 transition-colors duration-200 ${isFeaturedCard ? 'text-2xl' : 'text-lg'}`}>
-                                {depTime.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })} • {originName} → {destinationName}
+                                {depTime.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })} • {realOrigin} → {realDestination}
                             </h3>
                             <div className="flex items-center gap-1.5 mt-1">
                                 <span className="text-xs text-slate-400 font-medium">{trip.route?.name}</span>
