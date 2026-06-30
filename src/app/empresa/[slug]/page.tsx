@@ -7,7 +7,7 @@ import {
   Clock, Users, AlertCircle, ArrowLeft, Search,
   Calendar, ArrowRightLeft, Sparkles, CheckCircle2,
   Info, Route, Menu, X, Settings, Lock, Eye, EyeOff, Loader2,
-  Bell, ChevronDown
+  Bell, ChevronDown, ExternalLink, Copy, Check
 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -97,6 +97,7 @@ export default function EmpresaPublicaPage() {
         (currentUser.role === "ADMIN" || currentUser.role === "AGENCY_SELLER")))
   );
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [urlCopied, setUrlCopied] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
@@ -698,7 +699,7 @@ export default function EmpresaPublicaPage() {
                   ))}
                 </nav>
 
-                {/* Botón principal destacado */}
+                {/* Botón principal destacado + accesos rápidos */}
                 <div className="px-3 pb-3 space-y-2">
                   <button onClick={() => { setActiveSection("admin-dashboard"); setSidebarOpen(false); }}
                     className="flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:scale-[1.02] active:scale-95"
@@ -709,6 +710,51 @@ export default function EmpresaPublicaPage() {
                     <Settings className="w-4 h-4" />
                     Panel Principal
                   </button>
+
+                  {/* ── ACCESO DIRECTO A PÁGINA PÚBLICA ─────────────────── */}
+                  <div className="rounded-xl border border-white/8 overflow-hidden"
+                    style={{ background: "rgba(255,255,255,0.03)" }}>
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-slate-600 px-3 pt-2 pb-1">
+                      🌐 Página Pública
+                    </p>
+                    <div className="flex gap-1 px-2 pb-2">
+                      {/* Ver página pública en nueva pestaña */}
+                      <Link
+                        href={`/empresa/${Array.isArray(slug) ? slug[0] : slug}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setSidebarOpen(false)}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-[11px] font-semibold transition-all hover:scale-[1.02] active:scale-95"
+                        style={{
+                          background: `${primaryColor}18`,
+                          border: `1px solid ${primaryColor}35`,
+                          color: primaryColor,
+                        }}
+                        title="Ver cómo ven tu página los clientes">
+                        <ExternalLink className="w-3.5 h-3.5 flex-shrink-0" />
+                        Ver como cliente
+                      </Link>
+                      {/* Copiar URL */}
+                      <button
+                        onClick={() => {
+                          const url = `${window.location.origin}/empresa/${Array.isArray(slug) ? slug[0] : slug}`;
+                          navigator.clipboard.writeText(url).then(() => {
+                            setUrlCopied(true);
+                            setTimeout(() => setUrlCopied(false), 2000);
+                          });
+                        }}
+                        className="flex items-center justify-center px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all hover:scale-[1.02] active:scale-95"
+                        style={{
+                          background: urlCopied ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.05)",
+                          border: urlCopied ? "1px solid rgba(16,185,129,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                          color: urlCopied ? "#10b981" : "#64748b",
+                        }}
+                        title="Copiar URL pública">
+                        {urlCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+
                   <button onClick={handleLogout}
                     className="flex items-center justify-center gap-2 w-full px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 transition-all">
                     Cerrar Sesión

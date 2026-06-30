@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Building2, Palette, Phone, Globe, MapPin, Mail,
-  Save, CheckCircle2, AlertCircle, RefreshCw
+  Save, CheckCircle2, AlertCircle, RefreshCw, ExternalLink, Copy, Check
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import ImageUploader from "@/components/ui/ImageUploader";
@@ -40,6 +40,7 @@ export default function EmpresaAdminPerfilPage() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<"identidad" | "contacto" | "preview">("identidad");
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const [form, setForm] = useState({
     slug: "",
@@ -394,6 +395,48 @@ export default function EmpresaAdminPerfilPage() {
         {/* ─── TAB: PREVIEW ──────────────────────────────────────────────── */}
         {activeTab === "preview" && (
           <div className="space-y-4">
+            {/* ── Acceso directo a página pública ─────────────────────── */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 bg-indigo-500/8 border border-indigo-500/20 rounded-xl">
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-semibold flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-indigo-400" />
+                  Página pública de tu empresa
+                </p>
+                <p className="text-slate-500 text-xs mt-0.5 truncate">
+                  {typeof window !== "undefined" ? window.location.origin : "https://plataforma-bus-frontend.vercel.app"}/empresa/{form.slug || slugStr}
+                </p>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <a
+                  href={`/empresa/${form.slug || slugStr}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+                  style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                  <ExternalLink className="w-4 h-4" />
+                  Ver página
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = `${typeof window !== "undefined" ? window.location.origin : ""}/empresa/${form.slug || slugStr}`;
+                    navigator.clipboard.writeText(url).then(() => {
+                      setUrlCopied(true);
+                      setTimeout(() => setUrlCopied(false), 2000);
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all active:scale-95"
+                  style={{
+                    background: urlCopied ? "rgba(16,185,129,0.15)" : "rgba(255,255,255,0.06)",
+                    border: urlCopied ? "1px solid rgba(16,185,129,0.4)" : "1px solid rgba(255,255,255,0.12)",
+                    color: urlCopied ? "#10b981" : "#94a3b8",
+                  }}>
+                  {urlCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {urlCopied ? "¡Copiado!" : "Copiar URL"}
+                </button>
+              </div>
+            </div>
+
             <p className="text-slate-400 text-sm">Vista previa de cómo verán los pasajeros tu empresa:</p>
             <div className="rounded-2xl overflow-hidden border border-white/10">
               {/* Banner */}
