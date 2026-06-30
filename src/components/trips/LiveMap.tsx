@@ -65,9 +65,9 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
         attributionControl: true,
       });
 
-      // Tile layer OpenStreetMap (gratuito, sin API key)
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      // Tile layer CartoDB Dark Matter para modo oscuro premium
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
         maxZoom: 19,
       }).addTo(map);
 

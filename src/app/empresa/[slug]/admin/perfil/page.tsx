@@ -27,6 +27,7 @@ type CompanyBranding = {
   website: string | null;
   description: string | null;
   contactEmail: string | null;
+  sliderImages: string[] | null;
 };
 
 export default function EmpresaAdminPerfilPage() {
@@ -52,6 +53,7 @@ export default function EmpresaAdminPerfilPage() {
     website: "",
     description: "",
     contactEmail: "",
+    sliderImages: [] as string[],
   });
 
   useEffect(() => { loadBranding(); }, [slugStr]);
@@ -76,6 +78,7 @@ export default function EmpresaAdminPerfilPage() {
         website: c.website || "",
         description: c.description || "",
         contactEmail: c.contactEmail || "",
+        sliderImages: c.sliderImages || [],
       });
     } catch (e: any) {
       setError(e.message);
@@ -255,6 +258,39 @@ export default function EmpresaAdminPerfilPage() {
               fit="cover"
               hint="Recomendado: 1200×300px. Se recortará automáticamente al centro."
             />
+
+            {/* ── Fotos del Slider ──────────────────────────────────────── */}
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 font-medium block mb-0.5">
+                  🖼️ Fotos del Slider Principal
+                </label>
+                <p className="text-xs text-slate-600">
+                  Sube 3 fotos que se mostrarán como fondo animado en tu página de reservas. Ideal: paisajes, destinos o buses. Se optimizan a 1920×1080px.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Foto {index + 1}</p>
+                    <ImageUploader
+                      label={`Subir Foto ${index + 1}`}
+                      value={form.sliderImages[index] || ""}
+                      onChange={url => {
+                        const imgs = [...form.sliderImages];
+                        imgs[index] = url;
+                        setForm(f => ({ ...f, sliderImages: imgs }));
+                      }}
+                      maxWidth={1920}
+                      maxHeight={1080}
+                      quality={0.85}
+                      fit="cover"
+                      hint="1920×1080px recomendado"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Descripción */}
             <div>

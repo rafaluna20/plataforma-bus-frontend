@@ -190,9 +190,9 @@ export default function EmpresaAdminDashboard() {
         ) : (
           <div className="space-y-2">
             {todayTrips.slice(0, 5).map(trip => {
-              const wps = trip.route.waypoints || [];
-              const orig = wps[0]?.station?.name || "—";
-              const dest = wps[wps.length - 1]?.station?.name || "—";
+              const wps = trip.route?.waypoints || [];
+              const orig = wps[0]?.station?.name || trip.route?.name?.split(' - ')[0] || "—";
+              const dest = wps[wps.length - 1]?.station?.name || trip.route?.name?.split(' - ')[1] || "—";
               const dep = new Date(trip.departureTime);
               const st = statusConfig[trip.status] || statusConfig.SCHEDULED;
 
@@ -209,7 +209,7 @@ export default function EmpresaAdminDashboard() {
                       <span className="truncate">{dest}</span>
                     </div>
                     <p className="text-xs text-slate-500">
-                      {vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · {trip.vehicle.plateNumber}
+                      {trip.vehicle ? `${vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · ${trip.vehicle.plateNumber}` : "Vehículo no asignado"}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">

@@ -40,29 +40,49 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
   async function checkAuthAndLoad() {
     setLoading(true);
     try {
-      // Verificar que el usuario está autenticado y es ADMIN
+      // 1. Verificar que el usuario está autenticado y es ADMIN
       const user = getCurrentUser();
       if (!user || (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN")) {
         router.push(`/login?redirect=/empresa/${slugStr}/admin`);
         return;
       }
 
-      // Cargar datos de la empresa
-      const res = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error("Empresa no encontrada");
+      // 2. Obtener datos de la empresa directamente desde el servidor con el token del admin.
+      //    /branding/me ya valida que el usuario está autenticado y devuelve SU empresa.
+      //    Esta es la fuente de verdad — no necesitamos validar nada más en el cliente.
+      const meRes = await authFetch(`${API}/api/v1/branding/me`);
+      if (!meRes.ok) {
+        // Token inválido o usuario sin empresa
+        router.push("/login?redirect=/admin");
+        return;
+      }
+      const meData = await meRes.json();
+      const companyData = meData.company;
 
-      // Verificar que el admin pertenece a esta empresa
-      const companyId = data.company?.id;
-      if (user.role !== "SUPER_ADMIN" && user.companyId !== companyId) {
-        router.push("/?error=unauthorized");
+      if (!companyData) {
+        router.push("/login?redirect=/admin");
         return;
       }
 
-      setCompany(data.company);
+      // 3. Si la URL usa un RUC/número o UUID (no es un slug de texto amigable),
+      //    y la empresa ya tiene slug → redirigir a URL amigable
+      const isSlugUrl = /^[a-z][a-z0-9-]+[a-z0-9]$/.test(slugStr ?? "");
+      if (!isSlugUrl && companyData.slug) {
+        router.replace(`/empresa/${companyData.slug}/admin`);
+        return;
+      }
+
+      // 4. Si la URL tiene un slug de texto pero no coincide con la empresa del admin
+      //    (solo aplica para ADMIN, no SUPER_ADMIN que puede ver cualquier empresa)
+      if (isSlugUrl && user.role !== "SUPER_ADMIN" && companyData.slug && companyData.slug !== slugStr) {
+        router.replace(`/empresa/${companyData.slug}/admin`);
+        return;
+      }
+
+      setCompany(companyData);
       setAuthorized(true);
     } catch {
-      router.push(`/empresa/${slugStr}`);
+      router.push("/admin");
     } finally {
       setLoading(false);
     }

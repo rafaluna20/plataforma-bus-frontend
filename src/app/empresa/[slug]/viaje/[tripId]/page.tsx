@@ -7,10 +7,12 @@ import {
   ArrowLeft, Bus, Clock, Users, CheckCircle2, AlertCircle,
   Share2, Heart, ChevronRight, Loader2,
   Phone, ArrowRight, Ticket, RefreshCw,
-  CreditCard, Banknote, MapPin, FileText, Navigation
+  CreditCard, Banknote, MapPin, FileText, Navigation, Package
 } from "lucide-react";
 import SeatMapModal from "@/components/ui/SeatMapModal";
-import { API_URL, calcTripPrice } from "@/lib/config";
+import ParcelModal from "@/components/trips/ParcelModal";
+import { API_URL, calcTripPrice, calcTripPriceRange } from "@/lib/config";
+import { authFetch, getCurrentUser } from "@/lib/auth";
 import dynamic from "next/dynamic";
 
 // Importar LiveMap dinámicamente (solo cliente, usa Leaflet)
@@ -76,6 +78,7 @@ type CompanyPublic = {
   secondaryColor: string | null;
   phone: string | null;
   description: string | null;
+  ruc: string | null;
 };
 
 type Passenger = {
@@ -87,6 +90,22 @@ type Passenger = {
   destination: string;
   paymentStatus: string;
   paymentMethod: string;
+};
+
+type Parcel = {
+  id: string;
+  senderName: string;
+  senderDoc: string;
+  receiverName: string;
+  receiverDoc: string;
+  description: string | null;
+  weightKg: number | null;
+  totalPrice: number;
+  status: string;
+  paymentStatus: string;
+  createdAt: string;
+  startWaypoint: { station: { name: string } };
+  endWaypoint:   { station: { name: string } };
 };
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -129,11 +148,16 @@ export default function EmpresaViajeDetailPage() {
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState("");
-  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "mapa">("descripcion");
+  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "mapa">("descripcion");
   const [startWaypointId, setStartWaypointId] = useState("");
   const [endWaypointId, setEndWaypointId]     = useState("");
   const [seatModalOpen, setSeatModalOpen]     = useState(false);
   const [bookingSuccess, setBookingSuccess]   = useState<any>(null);
+  const [currentUser, setCurrentUser]         = useState<any>(null);
+
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
 
   // ─── Estado para la lista de pasajeros ───────────────────────────────────────
   const [passengers, setPassengers]         = useState<Passenger[]>([]);
@@ -143,32 +167,74 @@ export default function EmpresaViajeDetailPage() {
   // Contador real de pasajeros (desde el manifiesto)
   const [passengerCount, setPassengerCount] = useState<number | null>(null);
 
+  // ─── Estado para encomiendas ──────────────────────────────────────────────────
+  const [parcels, setParcels]               = useState<Parcel[]>([]);
+  const [loadingParcels, setLoadingParcels] = useState(false);
+  const [parcelsError, setParcelsError]     = useState("");
+  const [parcelSearch, setParcelSearch]     = useState("");
+  const [parcelModalOpen, setParcelModalOpen] = useState(false);
+
   // ─── Carga de datos ──────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
     if (!slugStr || !tripIdStr) return;
     setLoading(true);
     setError("");
     try {
-      const [companyRes, tripRes] = await Promise.all([
-        fetch(`${API_URL}/api/v1/branding/slug/${slugStr}`),
-        fetch(`${API_URL}/api/v1/trips/${tripIdStr}`),
-      ]);
-      const [companyData, tripData] = await Promise.all([
-        companyRes.json(),
-        tripRes.json(),
-      ]);
-      if (!companyRes.ok) throw new Error(companyData.error || "Empresa no encontrada");
-      if (!tripRes.ok)    throw new Error(tripData.error   || "Viaje no encontrado");
+      // 1. Cargar branding de empresa (intentar por slug, luego por ID/RUC)
+      let companyRes = await fetch(`${API_URL}/api/v1/branding/slug/${slugStr}`);
+      let companyData = await companyRes.json();
+
+      if (!companyRes.ok) {
+        const idRes = await fetch(`${API_URL}/api/v1/branding/id/${slugStr}`);
+        if (idRes.ok) {
+          companyData = await idRes.json();
+          companyRes = idRes;
+        } else {
+          throw new Error(companyData.error || "Empresa no encontrada");
+        }
+      }
+
+      // 2. Cargar detalle del viaje
+      const tripRes = await fetch(`${API_URL}/api/v1/trips/${tripIdStr}`);
+      const tripData = await tripRes.json();
+      if (!tripRes.ok) throw new Error(tripData.error || "Viaje no encontrado");
 
       setCompany(companyData.company);
       setTrip(tripData.trip);
-      setOccupiedSeats(tripData.occupiedSeats || []);
 
       const wps = tripData.trip?.route?.waypoints || [];
       if (wps.length >= 2) {
         setStartWaypointId(wps[0].id);
         setEndWaypointId(wps[wps.length - 1].id);
       }
+
+      // Pre-cargar conteo real de pasajeros y asientos ocupados
+      try {
+        const manifestRes = await fetch(`${API_URL}/api/v1/trips/${tripIdStr}/manifest`);
+        const manifestData = await manifestRes.json();
+        if (manifestRes.ok && manifestData.passengers) {
+          setPassengers(manifestData.passengers);
+          setPassengerCount(manifestData.passengers.length);
+          setOccupiedSeats(manifestData.passengers.map((p: Passenger) => p.seatId));
+        }
+      } catch (err) {
+        console.error("Error preloading manifest:", err);
+      }
+
+      // Pre-cargar encomiendas (solo para ADMIN / SUPER_ADMIN)
+      const user = getCurrentUser();
+      if (user && ["ADMIN", "SUPER_ADMIN"].includes(user.role)) {
+        try {
+          const parcelsRes = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripIdStr}`);
+          const parcelsData = await parcelsRes.json();
+          if (parcelsRes.ok && parcelsData.parcels) {
+            setParcels(parcelsData.parcels);
+          }
+        } catch (err) {
+          console.error("Error preloading parcels:", err);
+        }
+      }
+
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -201,12 +267,32 @@ export default function EmpresaViajeDetailPage() {
     }
   }, [tripIdStr]);
 
+  // ─── Carga de encomiendas ─────────────────────────────────────────────────────
+  const loadParcels = useCallback(async () => {
+    if (!tripIdStr) return;
+    setLoadingParcels(true);
+    setParcelsError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripIdStr}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al cargar encomiendas");
+      setParcels(data.parcels || []);
+    } catch (e: any) {
+      setParcelsError(e.message);
+    } finally {
+      setLoadingParcels(false);
+    }
+  }, [tripIdStr]);
+
   // Cargar pasajeros cuando se activa la pestaña
   useEffect(() => {
     if (activeTab === "pasajeros") {
       loadPassengers();
     }
-  }, [activeTab, loadPassengers]);
+    if (activeTab === "encomiendas") {
+      loadParcels();
+    }
+  }, [activeTab, loadPassengers, loadParcels]);
 
   // También recargar pasajeros cuando se registra una venta exitosa
   useEffect(() => {
@@ -215,25 +301,18 @@ export default function EmpresaViajeDetailPage() {
     }
   }, [bookingSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cargar el conteo real de pasajeros al montar la página
-  useEffect(() => {
-    if (tripIdStr) {
-      fetch(`${API_URL}/api/v1/trips/${tripIdStr}/manifest`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.passengers) {
-            setPassengerCount(data.passengers.length);
-            setOccupiedSeats(data.passengers.map((p: Passenger) => p.seatId));
-          }
-        })
-        .catch(() => {/* silencioso */});
-    }
-  }, [tripIdStr]);
-
   // ─── Precio calculado (memoizado, usa función centralizada) ──────────────────
   const pricePerSeat = useMemo(() => {
     if (!trip) return 0;
     return calcTripPrice(trip.route.waypoints, startWaypointId, endWaypointId);
+  }, [trip, startWaypointId, endWaypointId]);
+
+  // Rango de precios para BUS_2P (si hay precio diferenciado por piso)
+  const priceRange = useMemo(() => {
+    if (!trip || trip.vehicle?.vehicleType !== "BUS_2P") return null;
+    const [min, max] = calcTripPriceRange(trip.route.waypoints, startWaypointId, endWaypointId);
+    if (min === max) return null; // Sin diferencia, no mostrar rango
+    return { min, max };
   }, [trip, startWaypointId, endWaypointId]);
 
   // ─── Filtrado de pasajeros ────────────────────────────────────────────────────
@@ -248,6 +327,43 @@ export default function EmpresaViajeDetailPage() {
       p.destination.toLowerCase().includes(q)
     );
   }, [passengers, passengerSearch]);
+
+  // ─── Filtrado de encomiendas (DEBE estar antes de los early returns) ──────────
+  const filteredParcels = useMemo(() => {
+    if (!parcelSearch.trim()) return parcels;
+    const q = parcelSearch.toLowerCase();
+    return parcels.filter(p =>
+      p.senderName.toLowerCase().includes(q) ||
+      p.receiverName.toLowerCase().includes(q) ||
+      p.senderDoc.toLowerCase().includes(q) ||
+      p.receiverDoc.toLowerCase().includes(q) ||
+      (p.description || "").toLowerCase().includes(q)
+    );
+  }, [parcels, parcelSearch]);
+
+  // ─── Pestañas dinámicas (DEBE estar antes de los early returns) ───────────────
+  const waypointsLength = trip?.route?.waypoints?.length || 0;
+  const tabs = useMemo(() => {
+    const list: Array<{ id: "descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "mapa"; label: string }> = [
+      { id: "descripcion",  label: "Descripción" },
+      { id: "paradas",      label: `Paradas ${waypointsLength}` },
+      { id: "vehiculo",     label: "Vehículo" },
+    ];
+
+    const isAdminOrSellerOrDriver = currentUser && ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER", "DRIVER"].includes(currentUser.role);
+    const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
+
+    if (isAdminOrSellerOrDriver) {
+      list.push({ id: "pasajeros" as const, label: `Pasajeros (${occupiedSeats.length})` });
+    }
+    if (isAdminOrSuper) {
+      list.push({ id: "encomiendas" as const, label: `Encomiendas (${parcels.length})` });
+    }
+
+    list.push({ id: "mapa" as const, label: "Mapa" });
+    return list;
+  }, [waypointsLength, occupiedSeats.length, parcels.length, currentUser]);
+
 
   // ─── Loading / Error ─────────────────────────────────────────────────────────
   if (loading) {
@@ -289,13 +405,14 @@ export default function EmpresaViajeDetailPage() {
   const freeSeats     = vehicle.capacity - occupiedSeats.length;
   const occupancyPct  = Math.round((occupiedSeats.length / vehicle.capacity) * 100);
 
-  const tabs = [
-    { id: "descripcion" as const, label: "Descripción" },
-    { id: "paradas" as const, label: `Paradas ${waypoints.length}` },
-    { id: "vehiculo" as const, label: "Vehículo" },
-    { id: "pasajeros" as const, label: `Pasajeros (${occupiedSeats.length})` },
-    { id: "mapa" as const, label: "Mapa" },
-  ];
+  const parcelStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+    RECEIVED:         { label: "Recibido",     color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+    IN_TRANSIT:       { label: "En tránsito",  color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+    READY_FOR_PICKUP: { label: "Para retirar", color: "#06b6d4", bg: "rgba(6,182,212,0.12)" },
+    DELIVERED:        { label: "Entregado",    color: "#10b981", bg: "rgba(16,185,129,0.12)" },
+  };
+
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -746,6 +863,186 @@ export default function EmpresaViajeDetailPage() {
               </div>
             )}
 
+            {/* ─── Tab: Encomiendas ───────────────────────────────────────── */}
+            {activeTab === "encomiendas" && (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                      <Package className="w-5 h-5" style={{ color: primaryColor }} />
+                      Encomiendas
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                      {parcels.length} encomienda{parcels.length !== 1 ? "s" : ""} registrada{parcels.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={loadParcels}
+                      disabled={loadingParcels}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-all disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${loadingParcels ? "animate-spin" : ""}`} />
+                      Actualizar
+                    </button>
+                    <button
+                      onClick={() => setParcelModalOpen(true)}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-white text-xs font-bold transition-all hover:opacity-90"
+                      style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                    >
+                      <Package className="w-3.5 h-3.5" /> Nueva Encomienda
+                    </button>
+                  </div>
+                </div>
+
+                {/* Buscador */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={parcelSearch}
+                    onChange={e => setParcelSearch(e.target.value)}
+                    placeholder="Buscar por remitente, destinatario, descripción..."
+                    className="w-full bg-slate-900/60 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-white/20 transition-colors"
+                  />
+                  {parcelSearch && (
+                    <button
+                      onClick={() => setParcelSearch("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors text-xs"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                {/* Resumen */}
+                {parcels.length > 0 && (
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: "Total",        value: parcels.length,                                                     color: primaryColor,  bg: `${primaryColor}15` },
+                      { label: "En tránsito",  value: parcels.filter(p => p.status === "IN_TRANSIT").length,              color: "#f59e0b",     bg: "rgba(245,158,11,0.12)" },
+                      { label: "Para retirar", value: parcels.filter(p => p.status === "READY_FOR_PICKUP").length,        color: "#06b6d4",     bg: "rgba(6,182,212,0.12)" },
+                      { label: "Entregados",   value: parcels.filter(p => p.status === "DELIVERED").length,              color: "#10b981",     bg: "rgba(16,185,129,0.12)" },
+                    ].map((item, i) => (
+                      <div key={i} className="rounded-xl p-3 text-center border border-white/5" style={{ background: item.bg }}>
+                        <p className="text-xl font-extrabold" style={{ color: item.color }}>{item.value}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Loading */}
+                {loadingParcels && (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="flex flex-col items-center gap-3">
+                      <Loader2 className="w-8 h-8 animate-spin" style={{ color: primaryColor }} />
+                      <p className="text-slate-400 text-sm">Cargando encomiendas...</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Error */}
+                {parcelsError && !loadingParcels && (
+                  <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    {parcelsError}
+                  </div>
+                )}
+
+                {/* Sin encomiendas */}
+                {!loadingParcels && !parcelsError && parcels.length === 0 && (
+                  <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-12 text-center">
+                    <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: `${primaryColor}15` }}>
+                      <Package className="w-8 h-8" style={{ color: primaryColor }} />
+                    </div>
+                    <p className="text-white font-semibold">Sin encomiendas registradas</p>
+                    <p className="text-slate-500 text-sm mt-1">Este viaje aún no tiene envíos de encomiendas.</p>
+                    <button
+                      onClick={() => setParcelModalOpen(true)}
+                      className="mt-4 px-5 py-2.5 rounded-xl text-white text-sm font-bold transition-all hover:opacity-90"
+                      style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                    >
+                      Registrar primera encomienda
+                    </button>
+                  </div>
+                )}
+
+                {/* Lista de encomiendas */}
+                {!loadingParcels && !parcelsError && filteredParcels.length > 0 && (
+                  <div className="space-y-3">
+                    {filteredParcels.map((parcel) => {
+                      const pSt  = parcelStatusConfig[parcel.status] || parcelStatusConfig.RECEIVED;
+                      const payS = parcel.paymentStatus === "PENDING_CASH"
+                        ? { label: "Pago pendiente", color: "#f59e0b" }
+                        : { label: "Pagado",         color: "#10b981" };
+                      return (
+                        <div key={parcel.id} className="bg-slate-900/60 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all">
+                          <div className="flex items-start gap-4">
+                            {/* Ícono */}
+                            <div className="w-11 h-11 rounded-xl flex-shrink-0 flex items-center justify-center"
+                              style={{ background: `${primaryColor}20`, border: `1px solid ${primaryColor}30` }}>
+                              <Package className="w-5 h-5" style={{ color: primaryColor }} />
+                            </div>
+
+                            {/* Contenido */}
+                            <div className="flex-1 min-w-0">
+                              {/* Remitente → Destinatario */}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-white text-sm">{parcel.senderName}</span>
+                                <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                                <span className="font-bold text-white text-sm">{parcel.receiverName}</span>
+                              </div>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                DNI: {parcel.senderDoc} → {parcel.receiverDoc}
+                              </p>
+
+                              {/* Tramo */}
+                              <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400">
+                                <MapPin className="w-3 h-3" style={{ color: primaryColor }} />
+                                <span className="text-slate-300">{parcel.startWaypoint?.station?.name}</span>
+                                <ArrowRight className="w-3 h-3 text-slate-600" />
+                                <span className="text-slate-300">{parcel.endWaypoint?.station?.name}</span>
+                              </div>
+
+                              {/* Descripción y peso */}
+                              {(parcel.description || parcel.weightKg) && (
+                                <p className="text-xs text-slate-500 mt-1">
+                                  {parcel.description && <span>{parcel.description}</span>}
+                                  {parcel.description && parcel.weightKg && " · "}
+                                  {parcel.weightKg && <span>{parcel.weightKg} kg</span>}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Precio y estados */}
+                            <div className="text-right flex-shrink-0 space-y-1">
+                              <p className="font-extrabold text-white text-base">S/ {Number(parcel.totalPrice).toFixed(2)}</p>
+                              <span className="inline-block text-xs font-semibold px-2 py-0.5 rounded-full"
+                                style={{ background: pSt.bg, color: pSt.color }}>
+                                {pSt.label}
+                              </span>
+                              <br />
+                              <span className="inline-block text-xs font-medium" style={{ color: payS.color }}>
+                                {payS.label}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Nota de privacidad */}
+                {parcels.length > 0 && (
+                  <p className="text-xs text-slate-600 text-center pt-2">
+                    Información confidencial — solo visible para el personal autorizado de {company.tradeName}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* ─── Tab: Mapa ──────────────────────────────────────────────── */}
             {activeTab === "mapa" && (
               <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5">
@@ -774,9 +1071,20 @@ export default function EmpresaViajeDetailPage() {
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider">PRECIO POR ASIENTO</p>
                   <div className="flex items-end gap-3 mt-1">
-                    <p className="text-3xl font-extrabold" style={{ color: primaryColor }}>
-                      {pricePerSeat > 0 ? `S/ ${pricePerSeat.toFixed(2)}` : "Ver precio"}
-                    </p>
+                    {priceRange ? (
+                      <div>
+                        <p className="text-3xl font-extrabold" style={{ color: primaryColor }}>
+                          S/ {priceRange.min.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-amber-400 font-semibold mt-0.5">
+                          Piso 1 VIP: S/ {priceRange.max.toFixed(2)}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-3xl font-extrabold" style={{ color: primaryColor }}>
+                        {pricePerSeat > 0 ? `S/ ${pricePerSeat.toFixed(2)}` : "Ver precio"}
+                      </p>
+                    )}
                     <div className="text-right pb-1">
                       <p className="text-xs font-bold" style={{ color: primaryColor }}>{freeSeats} libres</p>
                       <p className="text-xs text-slate-500">de {vehicle.capacity} total</p>
@@ -840,6 +1148,15 @@ export default function EmpresaViajeDetailPage() {
                   Ver lista de pasajeros ({occupiedSeats.length})
                 </button>
 
+                {/* Acceso rápido a encomiendas */}
+                <button
+                  onClick={() => setParcelModalOpen(true)}
+                  className="w-full py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 flex items-center justify-center gap-2 border border-white/10 text-slate-300 hover:text-white hover:border-white/20"
+                >
+                  <Package className="w-4 h-4" />
+                  Registrar encomienda
+                </button>
+
                 <p className="text-xs text-slate-600 text-center">
                   Pago seguro. Cancelación gratuita hasta 24h antes.
                 </p>
@@ -880,7 +1197,12 @@ export default function EmpresaViajeDetailPage() {
       {/* ─── MODAL FULLSCREEN DE VENTA ─────────────────────────────────────── */}
       <SeatMapModal
         open={seatModalOpen}
-        onClose={() => setSeatModalOpen(false)}
+        onClose={() => {
+          setSeatModalOpen(false);
+          loadData();
+          loadPassengers();
+          loadParcels();
+        }}
         tripId={trip.id}
         vehicleType={vehicle.vehicleType}
         vehicleCapacity={vehicle.capacity}
@@ -890,17 +1212,32 @@ export default function EmpresaViajeDetailPage() {
         primaryColor={primaryColor}
         secondaryColor={secondaryColor}
         companyName={company.tradeName}
+        companyLogoUrl={company.logoUrl || undefined}
+        companyRuc={company.ruc || undefined}
         routeName={trip.route.name}
         departureTime={trip.departureTime}
+        plateNumber={vehicle.plateNumber || undefined}
         onSaleSuccess={(receipt) => {
           setOccupiedSeats(prev => [...prev, receipt.seatId]);
           setBookingSuccess(receipt);
-          // Si estamos en la pestaña de pasajeros, recargar la lista
-          if (activeTab === "pasajeros") {
-            loadPassengers();
-          }
+          if (activeTab === "pasajeros") loadPassengers();
         }}
       />
+
+      {/* ─── MODAL DE ENCOMIENDA ─────────────────────────────────────────────── */}
+      {parcelModalOpen && (
+        <ParcelModal
+          tripId={trip.id}
+          waypoints={waypoints}
+          primaryColor={primaryColor}
+          secondaryColor={secondaryColor}
+          onClose={() => setParcelModalOpen(false)}
+          onSuccess={() => {
+            loadParcels();
+            setActiveTab("encomiendas");
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,141 +1,250 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { authFetch } from "@/lib/auth";
-import { getCurrentUser } from "@/lib/auth";
+import Link from "next/link";
+import {
+  Bus, Ticket, BarChart3, Clock, Users, ArrowRight,
+  RefreshCw, TrendingUp, CheckCircle2, AlertCircle, Activity
+} from "lucide-react";
+import { authFetch, getCurrentUser } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-export default function AdminRedirectPage() {
+type Trip = {
+  id: string;
+  departureTime: string;
+  status: string;
+  route: { name: string; waypoints: any[] };
+  vehicle: { plateNumber: string; vehicleType: string; capacity: number };
+};
+
+const statusConfig: Record<string, { label: string; cls: string }> = {
+  SCHEDULED: { label: "Programado", cls: "text-slate-400 bg-slate-500/10 border-slate-500/20" },
+  BOARDING:  { label: "Abordando",  cls: "text-yellow-400 bg-yellow-500/10 border-yellow-500/20" },
+  IN_TRANSIT:{ label: "En Tránsito",cls: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
+  COMPLETED: { label: "Completado", cls: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
+  CANCELLED: { label: "Cancelado",  cls: "text-red-400 bg-red-500/10 border-red-500/20" },
+};
+
+const vehicleTypeLabel: Record<string, string> = {
+  MINIVAN: "Minivan", BUS_1P: "Bus 1 Piso", BUS_2P: "Bus 2 Pisos", AUTO: "Auto",
+};
+
+export default function AdminDashboardPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "error">("loading");
-  const [message, setMessage] = useState("Detectando tu empresa...");
+
+  const [company, setCompany] = useState<any>(null);
+  const [trips, setTrips] = useState<Trip[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [primaryColor, setPrimaryColor] = useState("#6366f1");
+  const [secondaryColor, setSecondaryColor] = useState("#8b5cf6");
 
   useEffect(() => {
-    redirectToCompanyAdmin();
+    loadData();
   }, []);
 
-  async function redirectToCompanyAdmin() {
+  async function loadData() {
+    setLoading(true);
     try {
-      // 1. Verificar que el usuario está autenticado
-      const localUser = getCurrentUser();
-      if (!localUser) {
+      const user = getCurrentUser();
+      if (!user) {
         router.replace("/login?redirect=/admin");
         return;
       }
 
-      // 2. SUPER_ADMIN sin empresa: ir al panel de superadmin
-      if (localUser.role === "SUPER_ADMIN" && !localUser.companyId) {
+      if (user.role === "SUPER_ADMIN" && !user.companyId) {
         router.replace("/superadmin");
         return;
       }
 
-      setMessage("Cargando datos de tu empresa...");
-
-      // 3. Obtener el perfil actualizado del servidor (tiene el slug de la empresa)
-      const profileRes = await authFetch(`${API}/api/v1/auth/me`);
-      if (!profileRes.ok) {
-        router.replace("/login?redirect=/admin");
-        return;
-      }
-      const profile = await profileRes.json();
-
-      const companySlug =
-        profile.company?.slug ||
-        profile.companySlug ||
-        null;
-
-      const companyId =
-        profile.company?.id ||
-        profile.companyId ||
-        localUser.companyId ||
-        null;
-
-      // 4. Obtener branding del usuario (que contiene el slug)
-      setMessage("Buscando información de tu empresa...");
+      // Obtener la empresa del usuario
       const brandingRes = await authFetch(`${API}/api/v1/branding/me`);
-      
       if (brandingRes.ok) {
-        const brandingData = await brandingRes.json();
-        const slug = brandingData.company?.slug || profile.company?.slug;
-        
-        if (slug) {
-          setMessage(`Redirigiendo a ${brandingData.company?.tradeName || "tu empresa"}...`);
-          router.replace(`/empresa/${slug}/admin`);
-          return;
+        const data = await brandingRes.json();
+        if (data.company) {
+          setCompany(data.company);
+          setPrimaryColor(data.company.primaryColor || "#6366f1");
+          setSecondaryColor(data.company.secondaryColor || "#8b5cf6");
+          
+          // Cargar viajes de la empresa
+          const tripsRes = await authFetch(`${API}/api/v1/management/trips/company/${data.company.id}`);
+          const tripsData = await tripsRes.json();
+          setTrips(tripsData.trips || []);
         }
       }
-
-      // Fallback: Si todo falla pero tenemos el ID de la empresa, redirigimos a una ruta genérica de empresa
-      if (companyId) {
-        setMessage("Redirigiendo con ID de empresa...");
-        router.replace(`/empresa/${companyId}/admin`);
-        return;
-      }
-
-      // 6. Sin empresa asociada
-      setStatus("error");
-      setMessage("Tu cuenta no tiene una empresa asociada. Contacta al soporte.");
-    } catch (err) {
-      console.error("Error al redirigir al admin:", err);
-      setStatus("error");
-      setMessage("Error al cargar tu empresa. Intenta iniciar sesión de nuevo.");
-    }
+    } catch { }
+    finally { setLoading(false); }
   }
 
+  const today = new Date();
+  const todayTrips = trips.filter(t => new Date(t.departureTime).toDateString() === today.toDateString());
+  const activeTrips = trips.filter(t => t.status === "IN_TRANSIT" || t.status === "BOARDING");
+  const scheduledTrips = trips.filter(t => t.status === "SCHEDULED");
+  const completedTrips = trips.filter(t => t.status === "COMPLETED");
+
+  const stats = [
+    { label: "Viajes Hoy", value: todayTrips.length, icon: <Clock className="w-5 h-5" />, color: primaryColor },
+    { label: "En Tránsito", value: activeTrips.length, icon: <Activity className="w-5 h-5" />, color: "#06b6d4" },
+    { label: "Programados", value: scheduledTrips.length, icon: <Bus className="w-5 h-5" />, color: "#f59e0b" },
+    { label: "Completados", value: completedTrips.length, icon: <CheckCircle2 className="w-5 h-5" />, color: "#10b981" },
+  ];
+
+  const quickActions = [
+    {
+      label: "Venta de Pasajes",
+      desc: "Registrar venta en mostrador",
+      icon: <Ticket className="w-6 h-6" />,
+      href: `/admin/venta-pasajes`,
+      highlight: true,
+    },
+    {
+      label: "Ver Todos los Viajes",
+      desc: "Gestionar viajes programados",
+      icon: <Bus className="w-6 h-6" />,
+      href: `/admin/viajes`,
+      highlight: false,
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
-      <div className="text-center space-y-6 max-w-sm">
-        {status === "loading" ? (
-          <>
-            {/* Spinner con gradiente */}
-            <div className="relative mx-auto w-16 h-16">
-              <div className="w-16 h-16 border-4 border-indigo-500/20 rounded-full" />
-              <div className="absolute inset-0 w-16 h-16 border-4 border-transparent border-t-indigo-500 rounded-full animate-spin" />
-              <div className="absolute inset-2 w-12 h-12 border-4 border-transparent border-t-cyan-400 rounded-full animate-spin"
-                style={{ animationDuration: "0.7s", animationDirection: "reverse" }} />
-            </div>
+    <div className="space-y-6">
 
-            <div className="space-y-2">
-              <p className="text-white font-semibold text-lg">Accediendo al panel</p>
-              <p className="text-slate-400 text-sm animate-pulse">{message}</p>
-            </div>
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">
+            Dashboard — {company?.tradeName || "Mi Empresa"}
+          </h1>
+          <p className="text-slate-400 text-sm mt-0.5">
+            {today.toLocaleDateString("es-PE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          {company && (
+            <Link href={`/empresa/${company.slug || company.id}`}
+              className="px-4 py-2 text-sm rounded-lg bg-slate-800 hover:bg-slate-700 text-white transition-colors border border-slate-700">
+              Ir a la página pública
+            </Link>
+          )}
+          <button onClick={loadData}
+            className="p-2 rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white transition-colors">
+            <RefreshCw className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
 
-            {/* Barra de progreso animada */}
-            <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-indigo-500 to-cyan-400 rounded-full animate-pulse"
-                style={{ width: "60%" }} />
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, i) => (
+          <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2 rounded-xl" style={{ background: `${stat.color}15` }}>
+                <span style={{ color: stat.color }}>{stat.icon}</span>
+              </div>
             </div>
-          </>
+            <p className="text-slate-400 text-xs font-medium">{stat.label}</p>
+            <p className="text-3xl font-bold text-white mt-1">
+              {loading ? "..." : stat.value}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Acciones rápidas */}
+      <div>
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Acciones Rápidas</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {quickActions.map(action => (
+            <Link key={action.href} href={action.href}
+              className={`flex items-center gap-4 p-5 rounded-2xl border transition-all hover:scale-[1.02] ${
+                action.highlight
+                  ? "border-transparent"
+                  : "border-slate-800 bg-slate-900 hover:border-slate-700"
+              }`}
+              style={action.highlight ? {
+                background: `linear-gradient(135deg, ${primaryColor}25, ${secondaryColor}15)`,
+                borderColor: `${primaryColor}40`,
+              } : {}}>
+              <div className="p-3 rounded-xl flex-shrink-0"
+                style={{ background: action.highlight ? `${primaryColor}30` : "rgba(255,255,255,0.05)" }}>
+                <span style={{ color: action.highlight ? primaryColor : "#94a3b8" }}>{action.icon}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`font-bold ${action.highlight ? "" : "text-white"}`}
+                  style={action.highlight ? { color: primaryColor } : {}}>
+                  {action.label}
+                </p>
+                <p className="text-slate-500 text-sm">{action.desc}</p>
+              </div>
+              <ArrowRight className="w-4 h-4 text-slate-600 flex-shrink-0" />
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Viajes de hoy */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Viajes de Hoy</h2>
+          <Link href={`/admin/viajes`}
+            className="text-xs flex items-center gap-1 transition-colors hover:text-white"
+            style={{ color: primaryColor }}>
+            Ver todos <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map(i => <div key={i} className="h-16 bg-slate-800 rounded-xl animate-pulse" />)}
+          </div>
+        ) : todayTrips.length === 0 ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
+            <Bus className="w-10 h-10 text-slate-600 mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">No hay viajes programados para hoy</p>
+          </div>
         ) : (
-          <>
-            {/* Error state */}
-            <div className="w-16 h-16 mx-auto rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
+          <div className="space-y-2">
+            {todayTrips.slice(0, 5).map(trip => {
+              const wps = trip.route?.waypoints || [];
+              const orig = wps[0]?.station?.name || trip.route?.name?.split(' - ')[0] || "—";
+              const dest = wps[wps.length - 1]?.station?.name || trip.route?.name?.split(' - ')[1] || "—";
+              const dep = new Date(trip.departureTime);
+              const st = statusConfig[trip.status] || statusConfig.SCHEDULED;
 
-            <div className="space-y-2">
-              <p className="text-white font-semibold text-lg">Sin empresa asignada</p>
-              <p className="text-slate-400 text-sm">{message}</p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setStatus("loading"); setMessage("Reintentando..."); redirectToCompanyAdmin(); }}
-                className="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition-colors text-sm"
-              >
-                Reintentar
-              </button>
-              <a href="/login"
-                className="w-full px-4 py-2.5 border border-white/10 text-slate-400 hover:text-white rounded-xl transition-colors text-sm text-center">
-                Volver al inicio de sesión
-              </a>
-            </div>
-          </>
+              return (
+                <div key={trip.id}
+                  className="flex items-center gap-4 p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-all">
+                  <div className="p-2 rounded-lg flex-shrink-0" style={{ background: `${primaryColor}15` }}>
+                    <Bus className="w-4 h-4" style={{ color: primaryColor }} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                      <span className="truncate">{orig}</span>
+                      <ArrowRight className="w-3 h-3 flex-shrink-0 text-slate-500" />
+                      <span className="truncate">{dest}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {trip.vehicle ? `${vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · ${trip.vehicle.plateNumber}` : "Vehículo no asignado"}
+                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-sm font-bold text-white">
+                      {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>
+                      {st.label}
+                    </span>
+                  </div>
+                  <Link href={`/admin/venta-pasajes?tripId=${trip.id}`}
+                    className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-all hover:opacity-80"
+                    style={{ background: `${primaryColor}20`, color: primaryColor }}>
+                    Vender
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

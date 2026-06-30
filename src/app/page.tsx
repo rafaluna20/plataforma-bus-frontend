@@ -91,16 +91,9 @@ export default function HomePage() {
   const [networkError, setNetworkError] = useState(false);
   const [vehicleFilter, setVehicleFilter] = useState("Todos");
 
-  // ─── Redirigir ADMIN/SUPER_ADMIN a su panel ────────────────────────────────
-  useEffect(() => {
-    if (!authLoading && user) {
-      if (user.role === "SUPER_ADMIN") {
-        router.replace("/superadmin");
-      } else if (user.role === "ADMIN") {
-        router.replace("/admin");
-      }
-    }
-  }, [authLoading, user, router]);
+  // ─── Los administradores ahora pueden ver la página principal ──────────────
+  // Ya no redirigimos automáticamente a /admin para que puedan usar el sidebar
+  // y navegar libremente por la plataforma si lo desean.
 
   // ─── Cargar viajes disponibles al inicio ───────────────────────────────────
   useEffect(() => {
@@ -193,7 +186,11 @@ export default function HomePage() {
 
   const filteredResults = useMemo(() => {
     if (vehicleFilter === "Todos") return results;
-    return results.filter(t => t.vehicleType?.toLowerCase() === vehicleFilter.toLowerCase());
+    return results.filter(t => {
+      // Access vehicleType correctly since it's nested inside the vehicle object
+      const type = (t as any).vehicle?.vehicleType || (t as any).vehicleType;
+      return type?.toLowerCase() === vehicleFilter.toLowerCase();
+    });
   }, [results, vehicleFilter]);
 
   const quickFilters = [
@@ -202,15 +199,6 @@ export default function HomePage() {
     { id: "Minivan", label: "Minivan", icon: <CarFront className="w-4 h-4" /> },
     { id: "Auto",    label: "Auto",    icon: <Car className="w-4 h-4" /> },
   ];
-
-  // Mientras redirige a admin/superadmin, no renderizar nada
-  if (!authLoading && user && (user.role === "SUPER_ADMIN" || user.role === "ADMIN")) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   const firstName = user?.name?.split(" ")[0] ?? null;
 

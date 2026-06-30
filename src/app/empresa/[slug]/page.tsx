@@ -6,7 +6,8 @@ import {
   Phone, Mail, Globe, MapPin, Bus, ArrowRight,
   Clock, Users, AlertCircle, ArrowLeft, Search,
   Calendar, ArrowRightLeft, Sparkles, CheckCircle2,
-  Info, Route, Menu, X, Settings, Lock, Eye, EyeOff, Loader2
+  Info, Route, Menu, X, Settings, Lock, Eye, EyeOff, Loader2,
+  Bell, ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -18,7 +19,18 @@ const AdminVenta = dynamic(() => import("./admin/venta/page"), { ssr: false });
 const AdminViajes = dynamic(() => import("./admin/viajes/page"), { ssr: false });
 const AdminRutas = dynamic(() => import("./admin/rutas/page"), { ssr: false });
 const AdminVehiculos = dynamic(() => import("./admin/vehiculos/page"), { ssr: false });
+const AdminVendedores = dynamic(() => import("./admin/vendedores/page"), { ssr: false });
 const AdminPerfil = dynamic(() => import("./admin/perfil/page"), { ssr: false });
+const MapaInteractivo = dynamic(() => import("@/components/map/MapaInteractivo"), { ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-full min-h-[400px]">
+      <div className="text-center">
+        <div className="w-10 h-10 border-2 border-blue-500/40 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-slate-400 text-sm">Cargando mapa interactivo...</p>
+      </div>
+    </div>
+  ),
+});
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -36,6 +48,7 @@ type CompanyPublic = {
   website: string | null;
   description: string | null;
   contactEmail: string | null;
+  sliderImages?: string[];
 };
 
 type Trip = {
@@ -55,7 +68,15 @@ const vehicleTypeLabel: Record<string, string> = {
   AUTO: "Auto",
 };
 
-type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-perfil";
+const tripStatusConfig: Record<string, { label: string; color: string; bg: string; pulse?: boolean }> = {
+  SCHEDULED:  { label: "Programado", color: "#10b981", bg: "rgba(16,185,129,0.12)" },
+  BOARDING:   { label: "Abordando",  color: "#f59e0b", bg: "rgba(245,158,11,0.12)", pulse: true },
+  IN_TRANSIT: { label: "En Ruta",    color: "#6366f1", bg: "rgba(99,102,241,0.12)", pulse: true },
+  COMPLETED:  { label: "Finalizado", color: "#94a3b8", bg: "rgba(148,163,184,0.12)" },
+  CANCELLED:  { label: "Cancelado",  color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
+};
+
+type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "mapa" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-vendedores" | "admin-perfil";
 
 export default function EmpresaPublicaPage() {
   const { slug } = useParams();
@@ -68,12 +89,20 @@ export default function EmpresaPublicaPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<ReturnType<typeof getCurrentUser>>(null);
   const { login, logout } = useAuth();
+
+  const isCompanyStaff = !!(
+    currentUser &&
+    (currentUser.role === "SUPER_ADMIN" ||
+      (company && currentUser.companyId === company.id &&
+        (currentUser.role === "ADMIN" || currentUser.role === "AGENCY_SELLER")))
+  );
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
 
   // Buscador y filtros
   const [origin, setOrigin] = useState("");
@@ -84,6 +113,13 @@ export default function EmpresaPublicaPage() {
   const [timeFilter, setTimeFilter] = useState("");
   const [searching, setSearching] = useState(false);
 
+  // Estado del mapa embebido
+  const [mapaViajes, setMapaViajes] = useState<import('@/components/map/MapaInteractivo').ViajeMapa[]>([]);
+  const [mapaSeleccionado, setMapaSeleccionado] = useState<import('@/components/map/MapaInteractivo').ViajeMapa | null>(null);
+  const [mapaLoading, setMapaLoading] = useState(false);
+  const [mapaRutas, setMapaRutas] = useState<import('@/components/map/MapaInteractivo').RutaMapa[]>([]);
+  const [rutaSeleccionada, setRutaSeleccionada] = useState<import('@/components/map/MapaInteractivo').RutaMapa | null>(null);
+
   useEffect(() => {
     loadCompany();
     // Leer el usuario del localStorage en el cliente
@@ -91,13 +127,53 @@ export default function EmpresaPublicaPage() {
     setCurrentUser(user);
   }, [slug]);
 
+  useEffect(() => {
+    if (company && currentUser) {
+      if (!isCompanyStaff && activeSection.startsWith("admin-")) {
+        setActiveSection("viajes");
+      }
+    }
+  }, [company?.id, currentUser, activeSection, isCompanyStaff]);
+
+  useEffect(() => {
+    // Definimos imágenes por defecto si la empresa no ha subido ninguna
+    const images = company?.sliderImages?.filter(Boolean).length 
+      ? company.sliderImages.filter(Boolean)
+      : [
+          "https://images.unsplash.com/photo-1526392060635-9d6019884377?q=80&w=1920&auto=format&fit=crop", // Peru Cusco
+          "https://images.unsplash.com/photo-1587595431973-160d0d94add1?q=80&w=1920&auto=format&fit=crop", // Machu Picchu
+          "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=1920&auto=format&fit=crop"  // Travel Bus
+        ];
+        
+    // The total number of slides is images.length + 1 (the map slide)
+    const totalSlides = images.length + 1;
+    
+    const interval = setInterval(() => {
+      setCurrentSlide(prev => (prev + 1) % totalSlides);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [company]);
+
   async function loadCompany() {
     setLoading(true);
     try {
       const slugStr = Array.isArray(slug) ? slug[0] : slug;
-      const res = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Empresa no encontrada");
+
+      // Intentar primero por slug
+      let res = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
+      let data = await res.json();
+
+      // Si no encontró por slug, intentar por ID/RUC (cuando la empresa no tiene slug aún)
+      if (!res.ok) {
+        const idRes = await fetch(`${API}/api/v1/branding/id/${slugStr}`);
+        if (idRes.ok) {
+          data = await idRes.json();
+          res = idRes;
+        } else {
+          throw new Error(data.error || "Empresa no encontrada");
+        }
+      }
+
       setCompany(data.company);
       await loadTrips(data.company.id);
     } catch (e: any) {
@@ -147,8 +223,8 @@ export default function EmpresaPublicaPage() {
       setLoginEmail("");
       setLoginPassword("");
       
-      // Redirigir al panel de administración externo si es admin
-      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN") && company && (user.companyId === company.id || user.role === "SUPER_ADMIN")) {
+      // Redirigir al panel de administración si es admin
+      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN")) {
         router.push(`/empresa/${slug}/admin`);
       }
     } catch (err: any) {
@@ -199,6 +275,12 @@ export default function EmpresaPublicaPage() {
     return true;
   });
 
+  // Ordenar: los viajes más recientes (o próximos) primero
+  const sortedTrips = [...filteredTrips].sort(
+    (a, b) => new Date(b.departureTime).getTime() - new Date(a.departureTime).getTime()
+  );
+
+
   const primaryColor = company?.primaryColor || "#6366f1";
   const secondaryColor = company?.secondaryColor || "#8b5cf6";
 
@@ -221,13 +303,119 @@ export default function EmpresaPublicaPage() {
       </Link>
     </div>
   );
-
   const navItems: { id: SidebarSection; label: string; icon: React.ReactNode }[] = [
     { id: "viajes", label: "Nuestros Viajes", icon: <Bus className="w-5 h-5" /> },
     { id: "rutas", label: "Rutas Disponibles", icon: <Route className="w-5 h-5" /> },
     { id: "contacto", label: "Contacto", icon: <Phone className="w-5 h-5" /> },
     { id: "nosotros", label: "Sobre Nosotros", icon: <Info className="w-5 h-5" /> },
   ];
+
+  // Cargar viajes y rutas del mapa cuando se activa esa sección
+  async function loadMapaViajes() {
+    if (mapaViajes.length > 0) return; // ya cargados
+    setMapaLoading(true);
+    try {
+      if (company) {
+        const res = await fetch(`${API}/api/v1/trips/search?companyId=${company.id}&limit=50`);
+        if (res.ok) {
+          const data = await res.json();
+          const trips: Trip[] = Array.isArray(data) ? data : (data.trips || data.data || []);
+
+          // Helper: extrae {lat, lng} desde station.location.coordinates (GeoJSON: [lng, lat])
+          const getCoords = (station: any): { lat: number; lng: number } | null => {
+            const coords = station?.location?.coordinates;
+            if (Array.isArray(coords) && coords.length === 2 && coords[0] !== 0) {
+              return { lat: Number(coords[1]), lng: Number(coords[0]) };
+            }
+            return null;
+          };
+
+          // ── Viajes para el modo "En Vivo" ────────────────────────────────
+          const viajesConCoordenadas = trips
+            .filter((t: Trip) => t.route?.waypoints?.length)
+            .map((t: Trip) => {
+              const wps = t.route!.waypoints!.sort((a: any, b: any) => a.stopOrder - b.stopOrder);
+              const firstCoords = getCoords(wps[0]?.station);
+              return {
+                id: t.id,
+                origen: wps[0]?.station?.name || 'Origen',
+                destino: wps[wps.length - 1]?.station?.name || 'Destino',
+                conductor: company.tradeName,
+                categoria: t.vehicle?.vehicleType === 'MINIVAN' ? 'minivan' : t.vehicle?.vehicleType === 'AUTO' ? 'auto' : 'bus',
+                estado: t.status === 'SCHEDULED' || t.status === 'IN_PROGRESS',
+                coordenadas: firstCoords ?? { lat: -12.0464, lng: -77.0428 },
+                precio: t.price || 0,
+                urlimagen: (t.vehicle as any)?.imageUrl,
+                pasajerosRestantes: t.availableSeats ?? 0,
+              };
+            });
+
+          // ── Rutas únicas para el modo "Red de Rutas" ─────────────────────
+          const rutasMap = new Map<string, import('@/components/map/MapaInteractivo').RutaMapa>();
+          trips.forEach((t: Trip) => {
+            if (!t.route?.waypoints?.length) return;
+            const rId = (t.route as any).id || t.route.name;
+            if (rutasMap.has(rId)) return;
+            const wps = t.route!.waypoints!.sort((a: any, b: any) => a.stopOrder - b.stopOrder);
+            const estaciones = wps
+              .map((wp: any) => {
+                const c = getCoords(wp.station);
+                if (!c) return null;
+                return {
+                  nombre: wp.station?.name || wp.locationName || 'Estación',
+                  lat: c.lat,
+                  lng: c.lng,
+                  stopOrder: wp.stopOrder ?? 0,
+                };
+              })
+              .filter(Boolean) as import('@/components/map/MapaInteractivo').EstacionRuta[];
+            if (estaciones.length >= 2) {
+              rutasMap.set(rId, {
+                id: rId,
+                nombre: t.route.name,
+                estaciones,
+              });
+            }
+          });
+          const rutasList = Array.from(rutasMap.values());
+
+          if (viajesConCoordenadas.length > 0 || rutasList.length > 0) {
+            setMapaViajes(viajesConCoordenadas);
+            setMapaRutas(rutasList);
+            setMapaLoading(false);
+            return;
+          }
+        }
+      }
+    } catch { /* fallback a datos de demo */ }
+
+    // ── Datos de demo si no hay reales o falló el fetch ───────────────────
+    setMapaViajes([
+      { id: '1', origen: 'Lima (Yerbateros)', destino: 'Huancayo', conductor: company?.tradeName || 'Empresa', categoria: 'minivan', estado: true, coordenadas: { lat: -12.0621, lng: -76.9932 }, precio: 45, pasajerosRestantes: 4 },
+      { id: '2', origen: 'Lima (Plaza Norte)', destino: 'Chimbote', conductor: company?.tradeName || 'Empresa', categoria: 'bus', estado: true, coordenadas: { lat: -11.9928, lng: -77.0607 }, precio: 60, pasajerosRestantes: 12 },
+      { id: '3', origen: 'Arequipa', destino: 'Juliaca', conductor: company?.tradeName || 'Empresa', categoria: 'bus', estado: false, coordenadas: { lat: -16.4090, lng: -71.5375 }, precio: 35, pasajerosRestantes: 0 },
+    ]);
+    setMapaRutas([
+      {
+        id: 'demo-1',
+        nombre: 'Lima → Huancayo',
+        estaciones: [
+          { nombre: 'Lima (Yerbateros)', lat: -12.0621, lng: -76.9932, stopOrder: 0 },
+          { nombre: 'La Oroya', lat: -11.5275, lng: -75.9063, stopOrder: 1 },
+          { nombre: 'Huancayo', lat: -12.0651, lng: -75.2049, stopOrder: 2 },
+        ],
+      },
+      {
+        id: 'demo-2',
+        nombre: 'Arequipa → Juliaca',
+        estaciones: [
+          { nombre: 'Arequipa', lat: -16.4090, lng: -71.5375, stopOrder: 0 },
+          { nombre: 'Juliaca', lat: -15.4907, lng: -70.1328, stopOrder: 1 },
+        ],
+      },
+    ]);
+    setMapaLoading(false);
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col">
@@ -243,51 +431,111 @@ export default function EmpresaPublicaPage() {
       {/* ─── TOPBAR DE LA EMPRESA ──────────────────────────────────────────── */}
       <header className="relative z-20 border-b border-white/5 bg-slate-900/90 backdrop-blur-xl sticky top-0">
         <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center gap-4">
+
           {/* Hamburger mobile */}
           <button onClick={() => setSidebarOpen(v => !v)}
-            className="lg:hidden p-2 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
+            className="lg:hidden p-2 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors flex-shrink-0">
             {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
 
           {/* Logo + nombre */}
-          <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden border border-white/10 flex items-center justify-center font-bold text-white text-sm"
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/10 flex items-center justify-center font-bold text-white text-sm flex-shrink-0"
               style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-              {company.logoUrl ? (
-                <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain p-1" />
-              ) : company.tradeName[0]}
+              {company.logoUrl
+                ? <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain p-0.5" />
+                : company.tradeName[0]}
             </div>
-            <div className="min-w-0">
-              <p className="font-bold text-white text-sm truncate">{company.tradeName}</p>
-              {company.city && <p className="text-slate-500 text-xs">{company.city}</p>}
-            </div>
+            <p className="font-bold text-white text-sm truncate hidden sm:block">{company.tradeName}</p>
           </div>
 
-          {/* Contacto rápido desktop */}
-          <div className="hidden md:flex items-center gap-4 text-sm">
-            {company.phone && (
-              <a href={`tel:${company.phone}`} className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors">
-                <Phone className="w-4 h-4" style={{ color: primaryColor }} /> {company.phone}
-              </a>
+          {/* Espacio flexible */}
+          <div className="flex-1" />
+
+          {/* ── ZONA DERECHA ─────────────────────────────── */}
+          <div className="flex items-center gap-3">
+
+            {currentUser ? (
+              <>
+                {/* Saldo + acciones (solo desktop) */}
+                <div className="hidden md:flex flex-col items-end mr-1">
+                  <span className="text-xs text-slate-400 font-medium leading-tight">
+                    Saldo: <span className="text-white font-bold">S/ 0.00</span>
+                  </span>
+                  <div className="flex gap-1.5 mt-1">
+                    <button className="px-3 py-1 rounded-lg text-xs font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                      style={{ background: `linear-gradient(135deg, #10b981, #059669)` }}>
+                      Recargar
+                    </button>
+                    <button className="px-3 py-1 rounded-lg text-xs font-bold text-slate-300 border border-white/15 hover:border-indigo-500/50 hover:text-white transition-all active:scale-95"
+                      style={{ background: "rgba(99,102,241,0.12)" }}>
+                      Retirar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campana de notificaciones */}
+                <button className="relative p-2 rounded-full border border-white/10 text-slate-400 hover:text-white transition-colors"
+                  title="Notificaciones">
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500" />
+                </button>
+
+                {/* Avatar usuario */}
+                <button
+                  onClick={() => {
+                    if (isCompanyStaff) {
+                      setActiveSection("admin-dashboard");
+                    }
+                  }}
+                  className="flex items-center gap-2.5 pl-1 pr-3 py-1 rounded-full border border-white/10 hover:border-white/25 transition-all group">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
+                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                    {currentUser.name?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                  <div className="hidden md:block text-left">
+                    <p className="text-white text-xs font-semibold leading-tight truncate max-w-[100px]">
+                      {currentUser.name?.split(" ").slice(0, 2).join(" ") || "Usuario"}
+                    </p>
+                    <p className="text-slate-500 text-[10px] font-medium leading-tight">
+                      {currentUser.role === "SUPER_ADMIN" ? "Super Admin" : currentUser.role === "ADMIN" ? "Admin" : "Usuario"}
+                    </p>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-500 group-hover:text-slate-300 transition-colors hidden md:block" />
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Botón login */}
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 border border-white/10 hover:border-white/25 hover:text-white transition-all">
+                  <Lock className="w-4 h-4" /> Iniciar Sesión
+                </button>
+
+                {/* Botón Reservar */}
+                <a href="#viajes"
+                  onClick={() => setActiveSection("viajes")}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                  style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                  Reservar <ArrowRight className="w-4 h-4" />
+                </a>
+              </>
             )}
-            {company.website && (
-              <a href={company.website} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-slate-400 hover:text-white transition-colors">
-                <Globe className="w-4 h-4" style={{ color: primaryColor }} />
-                {company.website.replace(/^https?:\/\//, "")}
+
+            {/* Reservar siempre visible cuando logueado */}
+            {currentUser && (
+              <a href="#viajes"
+                onClick={() => setActiveSection("viajes")}
+                className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                Reservar <ArrowRight className="w-4 h-4" />
               </a>
             )}
           </div>
-
-          {/* CTA Reservar */}
-          <a href="#viajes"
-            onClick={() => setActiveSection("viajes")}
-            className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-            style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-            Reservar <ArrowRight className="w-4 h-4" />
-          </a>
         </div>
       </header>
+
 
       {/* ─── LAYOUT PRINCIPAL: SIDEBAR + CONTENIDO ─────────────────────────── */}
       <div className="relative z-10 flex flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 gap-6">
@@ -350,7 +598,36 @@ export default function EmpresaPublicaPage() {
                   {item.label}
                 </button>
               ))}
+
+              {/* ── Mapa Interactivo ─────────────────────────────────────── */}
+              <button
+                onClick={() => { setActiveSection("mapa"); setSidebarOpen(false); loadMapaViajes(); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group relative overflow-hidden ${
+                  activeSection === "mapa" ? "" : ""
+                }`}
+                style={activeSection === "mapa" ? {
+                  background: "linear-gradient(135deg, rgba(59,130,246,0.25), rgba(6,182,212,0.15))",
+                  border: "1px solid rgba(59,130,246,0.4)",
+                  color: "#60a5fa",
+                } : {
+                  background: "linear-gradient(135deg, rgba(59,130,246,0.12), rgba(6,182,212,0.08))",
+                  border: "1px solid rgba(59,130,246,0.2)",
+                  color: "#60a5fa",
+                }}>
+                {/* Shimmer en hover */}
+                <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{ background: "linear-gradient(135deg, rgba(59,130,246,0.2), rgba(6,182,212,0.12))" }} />
+                <span className="relative flex items-center gap-3 w-full">
+                  <MapPin className="w-5 h-5 flex-shrink-0" style={{ color: "#3b82f6" }} />
+                  <span className="flex-1 text-left">Mapa de Flotas</span>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse"
+                    style={{ background: "rgba(59,130,246,0.25)", color: "#93c5fd" }}>
+                    EN VIVO
+                  </span>
+                </span>
+              </button>
             </nav>
+
 
             {/* Contacto rápido en sidebar */}
             <div className="p-4 border-t border-white/5 space-y-3">
@@ -382,31 +659,34 @@ export default function EmpresaPublicaPage() {
               )}
             </div>
 
-            {/* ─── PANEL DE GESTIÓN ADMIN (solo visible para admin de esta empresa) */}
-            {currentUser && (currentUser.role === "ADMIN" || currentUser.role === "SUPER_ADMIN") && (
+            {/* ─── PANEL DE GESTIÓN ADMIN (solo visible para admin/seller de esta empresa) */}
+            {isCompanyStaff && (
               <div className="border-t border-white/5">
                 {/* Header de la sección */}
                 <div className="px-4 pt-3 pb-1 flex items-center justify-between">
                   <p className="text-xs font-bold uppercase tracking-widest"
                     style={{ color: primaryColor }}>
-                    ⚙ Gestión Admin
+                    ⚙ Gestión Interna
                   </p>
                   <span className="text-[10px] px-1.5 py-0.5 rounded-md font-bold"
                     style={{ background: `${primaryColor}20`, color: primaryColor }}>
-                    ADMIN
+                    {currentUser.role === "AGENCY_SELLER" ? "AGENCIA" : "ADMIN"}
                   </span>
                 </div>
 
                 {/* Links de administración */}
                 <nav className="p-2 space-y-0.5">
                   {[
-                    { id: "admin-dashboard", label: "Dashboard", emoji: "📊" },
-                    { id: "admin-venta", label: "Venta de Pasajes", emoji: "🎫" },
-                    { id: "admin-viajes", label: "Mis Viajes", emoji: "🚌" },
-                    { id: "admin-rutas", label: "Gestión de Rutas", emoji: "🗺️" },
-                    { id: "admin-vehiculos", label: "Flota de Vehículos", emoji: "🚐" },
-                    { id: "admin-perfil", label: "Perfil de Empresa", emoji: "🏢" },
-                  ].map(item => (
+                    { id: "admin-dashboard", label: "Dashboard", emoji: "📊", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-venta", label: "Venta de Pasajes", emoji: "🎫", roles: ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"] },
+                    { id: "admin-viajes", label: "Mis Viajes", emoji: "🚌", roles: ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"] },
+                    { id: "admin-rutas", label: "Gestión de Rutas", emoji: "🗺️", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-vehiculos", label: "Flota de Vehículos", emoji: "🚐", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-vendedores", label: "Personal", emoji: "👥", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-perfil", label: "Perfil de Empresa", emoji: "🏢", roles: ["ADMIN", "SUPER_ADMIN"] },
+                  ]
+                  .filter(item => item.roles.includes(currentUser.role))
+                  .map(item => (
                     <button key={item.id}
                       onClick={() => { setActiveSection(item.id as SidebarSection); setSidebarOpen(false); }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all group text-left ${
@@ -439,10 +719,16 @@ export default function EmpresaPublicaPage() {
 
             {/* Footer sidebar */}
             <div className="p-4 border-t border-white/5 space-y-3">
-              {(!currentUser || (currentUser.role !== "ADMIN" && currentUser.role !== "SUPER_ADMIN")) && (
+              {(!currentUser || !isCompanyStaff) && (
                 <button onClick={() => setShowLoginModal(true)}
                   className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/10 border border-white/10 transition-all">
                   🔑 Acceso Administrativo
+                </button>
+              )}
+              {currentUser && !isCompanyStaff && (
+                <button onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 hover:bg-red-500/10 transition-all">
+                  Cerrar Sesión
                 </button>
               )}
               <p className="text-xs text-slate-600 text-center">
@@ -461,21 +747,146 @@ export default function EmpresaPublicaPage() {
           {/* ── SECCIÓN: VIAJES ─────────────────────────────────────────── */}
           {activeSection === "viajes" && (
             <div className="space-y-6">
-              {/* Hero */}
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border"
-                  style={{ background: `${primaryColor}15`, borderColor: `${primaryColor}30`, color: primaryColor }}>
-                  <Sparkles className="w-3.5 h-3.5" /> Viajes seguros y puntuales
-                </div>
-                <h2 className="text-2xl md:text-3xl font-extrabold text-white">
-                  Reserva con{" "}
-                  <span className="text-transparent bg-clip-text"
-                    style={{ backgroundImage: `linear-gradient(to right, ${primaryColor}, ${secondaryColor})` }}>
-                    {company.tradeName}
-                  </span>
-                </h2>
-                {company.description && <p className="text-slate-400 text-sm">{company.description}</p>}
-              </div>
+              {/* Hero Slider (Opción 1: Fondo con degradado + slide de mapa) */}
+              {(() => {
+                const sliderImgs = company.sliderImages?.filter(Boolean).length
+                  ? company.sliderImages.filter(Boolean)
+                  : [
+                      "https://images.unsplash.com/photo-1526392060635-9d6019884377?q=80&w=1920&auto=format&fit=crop",
+                      "https://images.unsplash.com/photo-1587595431973-160d0d94add1?q=80&w=1920&auto=format&fit=crop",
+                      "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?q=80&w=1920&auto=format&fit=crop",
+                    ];
+
+                // Total slides: fotos + 1 slide de mapa
+                const TOTAL_SLIDES = sliderImgs.length + 1;
+                const MAP_SLIDE_INDEX = sliderImgs.length; // último slide
+
+                return (
+                  <div className="relative overflow-hidden rounded-2xl min-h-[220px] md:min-h-[300px] flex items-end"
+                    style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)" }}>
+
+                    {/* ── Slides de foto (cross-fade) */}
+                    {sliderImgs.map((img, i) => (
+                      <div
+                        key={i}
+                        className="absolute inset-0 transition-opacity duration-1000"
+                        style={{ opacity: i === currentSlide ? 1 : 0 }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img}
+                          alt={`Slide ${i + 1}`}
+                          className="w-full h-full object-cover"
+                          loading={i === 0 ? "eager" : "lazy"}
+                        />
+                      </div>
+                    ))}
+
+                    {/* ── Slide especial: MAPA INTERACTIVO ─────────────────── */}
+                    <div
+                      className="absolute inset-0 transition-opacity duration-1000"
+                      style={{ opacity: currentSlide === MAP_SLIDE_INDEX ? 1 : 0, pointerEvents: currentSlide === MAP_SLIDE_INDEX ? "auto" : "none" }}
+                    >
+                      {/* Imagen limpia de mapa/carretera para evitar letras repetidas del iframe */}
+                      <img
+                        src="https://images.unsplash.com/photo-1506015391300-4802dc74de2e?q=80&w=1920&auto=format&fit=crop"
+                        alt="Mapa de rutas"
+                        className="w-full h-full object-cover filter brightness-[0.4]"
+                      />
+                      {/* Overlay semitransparente + CTA */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-slate-950/80 via-slate-950/40 to-transparent pointer-events-none" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent pointer-events-none" />
+                      <div className="absolute bottom-0 left-0 right-0 z-10 p-6 md:p-8">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border mb-3"
+                          style={{ background: "#3b82f625", borderColor: "#3b82f650", color: "#60a5fa" }}>
+                          <MapPin className="w-3.5 h-3.5" /> Seguimiento en tiempo real
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-extrabold text-white drop-shadow-lg leading-tight">
+                          Viajes en ruta{" "}
+                          <span className="text-transparent bg-clip-text"
+                            style={{ backgroundImage: "linear-gradient(to right, #3b82f6, #06b6d4)" }}>
+                            ahora mismo
+                          </span>
+                        </h2>
+                        <p className="text-slate-300 text-sm mt-2 mb-4 drop-shadow">
+                          Visualiza todos los buses y vehículos activos en el mapa interactivo
+                        </p>
+                        <Link href="/mapa" target="_blank"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                          style={{ background: "linear-gradient(135deg, #3b82f6, #06b6d4)" }}>
+                          <MapPin className="w-4 h-4" /> Ver mapa completo
+                          <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {/* Degradados de fotos (solo visibles en slides de imagen) */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-slate-900/30 transition-opacity duration-1000 pointer-events-none"
+                      style={{ opacity: currentSlide === MAP_SLIDE_INDEX ? 0 : 1 }} />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent transition-opacity duration-1000 pointer-events-none"
+                      style={{ opacity: currentSlide === MAP_SLIDE_INDEX ? 0 : 1 }} />
+
+                    {/* Contenido sobre slides de foto */}
+                    <div className="relative z-10 p-6 md:p-8 w-full transition-opacity duration-500"
+                      style={{ opacity: currentSlide === MAP_SLIDE_INDEX ? 0 : 1, pointerEvents: currentSlide === MAP_SLIDE_INDEX ? "none" : "auto" }}>
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border mb-3"
+                        style={{ background: `${primaryColor}15`, borderColor: `${primaryColor}40`, color: primaryColor }}>
+                        <Sparkles className="w-3.5 h-3.5" /> Viajes seguros y puntuales
+                      </div>
+                      <h2 className="text-2xl md:text-4xl font-extrabold text-white drop-shadow-lg leading-tight">
+                        Reserva con{" "}
+                        <span className="text-transparent bg-clip-text"
+                          style={{ backgroundImage: `linear-gradient(to right, ${primaryColor}, ${secondaryColor})` }}>
+                          {company.tradeName}
+                        </span>
+                      </h2>
+                      {company.description && (
+                        <p className="text-slate-300 text-sm mt-2 max-w-lg drop-shadow">{company.description}</p>
+                      )}
+
+                      {/* Indicadores del slider */}
+                      <div className="flex items-center gap-2 mt-4">
+                        {Array.from({ length: TOTAL_SLIDES }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentSlide(i)}
+                            className="rounded-full transition-all duration-300"
+                            style={{
+                              width: i === currentSlide ? "24px" : "8px",
+                              height: "8px",
+                              background: i === MAP_SLIDE_INDEX
+                                ? (i === currentSlide ? "#3b82f6" : "rgba(59,130,246,0.4)")
+                                : (i === currentSlide ? primaryColor : "rgba(255,255,255,0.3)"),
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Indicadores también visibles en slide de mapa */}
+                    {currentSlide === MAP_SLIDE_INDEX && (
+                      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+                        {Array.from({ length: TOTAL_SLIDES }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentSlide(i)}
+                            className="rounded-full transition-all duration-300"
+                            style={{
+                              width: i === currentSlide ? "24px" : "8px",
+                              height: "8px",
+                              background: i === MAP_SLIDE_INDEX
+                                ? (i === currentSlide ? "#3b82f6" : "rgba(59,130,246,0.4)")
+                                : (i === currentSlide ? primaryColor : "rgba(255,255,255,0.5)"),
+                            }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+
 
               {/* Buscador */}
               <form onSubmit={handleSearch}
@@ -502,8 +913,32 @@ export default function EmpresaPublicaPage() {
                       className="w-full pl-9 pr-4 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm focus:outline-none transition-colors [color-scheme:dark]" />
                   </div>
                   <button type="submit" disabled={searching}
-                    className="w-full md:w-auto px-6 py-2.5 text-white font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2 shrink-0"
-                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                    className="w-full md:w-auto px-6 py-2.5 font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 shrink-0"
+                    style={{
+                      background: "linear-gradient(135deg, #1e293b, #0f172a)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "#94a3b8",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                      transition: "all 0.25s ease",
+                    }}
+                    onMouseEnter={e => {
+                      if (!searching) {
+                        const el = e.currentTarget;
+                        el.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`;
+                        el.style.color = "#ffffff";
+                        el.style.borderColor = `${primaryColor}60`;
+                        el.style.boxShadow = `0 6px 24px ${primaryColor}60, 0 0 0 2px ${primaryColor}30`;
+                        el.style.transform = "translateY(-2px) scale(1.03)";
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      const el = e.currentTarget;
+                      el.style.background = "linear-gradient(135deg, #1e293b, #0f172a)";
+                      el.style.color = "#94a3b8";
+                      el.style.borderColor = "rgba(255,255,255,0.1)";
+                      el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.4)";
+                      el.style.transform = "translateY(0) scale(1)";
+                    }}>
                     {searching ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Search className="w-4 h-4" />}
                     {searching ? "Buscando..." : "Buscar"}
                   </button>
@@ -576,8 +1011,8 @@ export default function EmpresaPublicaPage() {
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-slate-400">
-                    {filteredTrips.length > 0
-                      ? `${filteredTrips.length} viaje${filteredTrips.length !== 1 ? "s" : ""} encontrado${filteredTrips.length !== 1 ? "s" : ""}`
+                    {sortedTrips.length > 0
+                      ? `${sortedTrips.length} viaje${sortedTrips.length !== 1 ? "s" : ""} encontrado${sortedTrips.length !== 1 ? "s" : ""}`
                       : "Sin resultados"}
                     {(vehicleFilter || routeFilter) && (
                       <span className="ml-2 text-xs text-slate-600">(filtrado de {trips.length} total)</span>
@@ -588,7 +1023,7 @@ export default function EmpresaPublicaPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[1,2,3,4].map(i => <div key={i} className="h-36 bg-white/5 rounded-2xl animate-pulse" />)}
                   </div>
-                ) : filteredTrips.length === 0 ? (
+                ) : sortedTrips.length === 0 ? (
                   <div className="bg-slate-900/60 rounded-2xl border border-white/5 p-10 text-center">
                     <Bus className="w-10 h-10 text-slate-600 mx-auto mb-3" />
                     <p className="text-slate-400">No hay viajes disponibles</p>
@@ -596,7 +1031,7 @@ export default function EmpresaPublicaPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {filteredTrips.map(trip => {
+                    {sortedTrips.map(trip => {
                       const departure = new Date(trip.departureTime);
                       const waypoints = trip.route?.waypoints?.sort((a: any, b: any) => a.stopOrder - b.stopOrder) || [];
                       const orig = waypoints[0]?.station?.name || "";
@@ -612,56 +1047,132 @@ export default function EmpresaPublicaPage() {
                       };
                       const vehicleImg = (trip.vehicle as any)?.imageUrl || vehicleImages[trip.vehicle?.vehicleType] || vehicleImages["BUS_1P"];
 
+                      const status = trip.status || "SCHEDULED";
+                      const statusInfo = tripStatusConfig[status] || tripStatusConfig.SCHEDULED;
+                      const isPast = status === "COMPLETED" || status === "CANCELLED";
+                      const availableSeats = trip.availableSeats ?? trip.vehicle?.capacity;
+                      const hasFewSeats = availableSeats <= 10;
+
+                      // Formato de hora: "10:05 PM"
+                      const timeStr = departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })
+                        .replace("a. m.", "AM")
+                        .replace("p. m.", "PM")
+                        .replace("am", "AM")
+                        .replace("pm", "PM");
+                      // Formato de fecha simplificado: "Jue, 02 Jul"
+                      const dateStr = departure.toLocaleDateString("es-PE", { weekday: "short", day: "2-digit", month: "short" });
+
                       return (
                         <Link key={trip.id} href={`/empresa/${Array.isArray(slug) ? slug[0] : slug}/viaje/${trip.id}`}
-                          className="group block bg-slate-900/80 border border-white/8 rounded-2xl overflow-hidden hover:border-white/20 hover:shadow-lg transition-all duration-200"
-                          style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                          className={`group block bg-slate-900/80 border rounded-2xl overflow-hidden transition-all duration-300 ${(trip.status === "COMPLETED" || trip.status === "CANCELLED") ? "opacity-60 hover:opacity-85" : ""}`}
+                          style={{
+                            borderColor: "rgba(255,255,255,0.06)",
+                            boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+                            transition: "all 0.3s ease",
+                          }}
+                          onMouseEnter={e => {
+                            if (trip.status !== "COMPLETED" && trip.status !== "CANCELLED") {
+                              e.currentTarget.style.borderColor = `${primaryColor}70`;
+                              e.currentTarget.style.boxShadow = `0 12px 48px ${primaryColor}55, 0 4px 16px ${primaryColor}30, 0 0 0 1px ${primaryColor}25`;
+                              e.currentTarget.style.transform = "translateY(-3px)";
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                            e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.3)";
+                            e.currentTarget.style.transform = "translateY(0)";
+                          }}
+                        >
 
                           {/* Layout: info izquierda + imagen derecha */}
                           <div className="flex items-stretch">
 
-                            {/* ── INFO IZQUIERDA ─────────────────────────── */}
-                            <div className="flex-1 p-4 space-y-2 min-w-0">
+                            {/* ── INFO IZQUIERDA (REDISEÑADA) ─────────────── */}
+                            <div className="flex-1 p-4 space-y-3 min-w-0 flex flex-col justify-between">
 
-                              {/* Empresa + ruta */}
-                              <div>
-                                <p className="text-xs text-slate-500">
-                                  <span className="font-bold text-slate-300">EMPRESA:</span> {company.tradeName}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                  <span className="font-bold text-slate-300">CARRO:</span> {typeLabel} {trip.vehicle?.plateNumber}
-                                </p>
-                                <p className="text-xs font-bold mt-0.5" style={{ color: primaryColor }}>
-                                  ASIENTOS LIBRES: {trip.availableSeats ?? trip.vehicle?.capacity}
-                                </p>
+                              {/* Encabezado: Hora + Estado */}
+                              <div className="flex justify-between items-start gap-2">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-xl font-extrabold text-white tracking-tight">{timeStr}</span>
+                                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{dateStr}</span>
+                                </div>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider shrink-0 transition-all"
+                                  style={{
+                                    background: statusInfo.bg,
+                                    borderColor: `${statusInfo.color}30`,
+                                    color: statusInfo.color
+                                  }}>
+                                  {statusInfo.pulse && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse shrink-0" />
+                                  )}
+                                  {statusInfo.label.toUpperCase()}
+                                </span>
                               </div>
 
-                              {/* Ruta origen → destino */}
+                              {/* Ruta: Diagrama Horizontal minimalista */}
                               {(orig || dest) && (
-                                <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                                  <span className="text-slate-200 font-medium truncate">{orig}</span>
-                                  <ArrowRight className="w-3 h-3 flex-shrink-0 text-slate-600" />
-                                  <span className="text-slate-200 font-medium truncate">{dest}</span>
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                                    <span className="font-bold text-slate-200 truncate max-w-[120px]">{orig}</span>
+                                    <div className="flex-1 flex items-center justify-center relative min-w-[20px]">
+                                      <div className="w-full h-[1px] bg-slate-800" />
+                                      <Bus className="w-3 h-3 text-slate-600 absolute bg-slate-900 px-0.5 rounded-full" />
+                                    </div>
+                                    <span className="font-bold text-slate-200 truncate max-w-[120px]">{dest}</span>
+                                  </div>
+
+                                  {/* Barra de progreso de avance del viaje */}
+                                  {(() => {
+                                    let progressPercent = 0;
+                                    if (status === "BOARDING") progressPercent = 15;
+                                    else if (status === "IN_TRANSIT") progressPercent = 55;
+                                    else if (status === "COMPLETED") progressPercent = 100;
+
+                                    return (
+                                      <div className="space-y-1 pt-0.5">
+                                        <div className="flex justify-between items-center text-[8px] text-slate-600 font-bold uppercase tracking-wider">
+                                          <span className={status === "BOARDING" ? "text-amber-500/80 font-bold" : ""}>Inicio</span>
+                                          <span className={status === "IN_TRANSIT" ? "text-indigo-400 font-bold" : ""}>En Ruta</span>
+                                          <span className={status === "COMPLETED" ? "text-slate-400 font-bold" : ""}>Fin</span>
+                                        </div>
+                                        <div className="relative w-full h-1 bg-slate-950/60 rounded-full overflow-hidden border border-white/5">
+                                          <div
+                                            className="h-full rounded-full transition-all duration-500"
+                                            style={{
+                                              width: `${progressPercent}%`,
+                                              background: status === "COMPLETED"
+                                                ? "#475569"
+                                                : `linear-gradient(90deg, ${primaryColor}, ${secondaryColor})`,
+                                            }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               )}
 
-                              {/* Hora de salida */}
-                              <div className="space-y-1">
-                                <p className="text-xs font-bold text-slate-300">HORA SALIDA:</p>
-                                <p className="text-xs text-slate-400">
-                                  <span className="text-slate-500">-Aproximada:</span>{" "}
-                                  <span className="text-slate-200">{departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</span>
-                                </p>
-                                <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium"
-                                  style={{ background: "rgba(30,30,40,0.9)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                                  <span className="text-slate-500">-Confirmada:</span>{" "}
-                                  <span className="text-white font-bold">{departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}</span>
+                              {/* Footer de Info: Vehiculo y Asientos */}
+                              <div className="flex items-center justify-between gap-2 pt-1">
+                                <span className="text-[10px] text-slate-500 font-semibold truncate uppercase">
+                                  {typeLabel} • {trip.vehicle?.plateNumber}
+                                </span>
+                                <div>
+                                  {hasFewSeats ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse uppercase tracking-wider">
+                                      ⚠️ ¡Últimos {availableSeats}!
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase tracking-wider">
+                                      ✅ {availableSeats} Libres
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
 
-                            {/* ── IMAGEN + PRECIO DERECHA ─────────────────── */}
-                            <div className="w-36 flex-shrink-0 relative flex flex-col items-center justify-between p-3 bg-slate-800/40">
+                            {/* ── IMAGEN + PRECIO DERECHA (MANTENIDO Y REDISEÑADO) ── */}
+                            <div className="w-36 flex-shrink-0 relative flex flex-col items-center justify-between p-3 bg-slate-800/30 border-l border-white/5">
                               {/* Imagen del vehículo */}
                               <div className="w-full h-20 flex items-center justify-center">
                                 <img
@@ -674,12 +1185,35 @@ export default function EmpresaPublicaPage() {
                                 />
                               </div>
 
-                              {/* Precio */}
-                              <div className="mt-2 px-3 py-1.5 rounded-xl text-sm font-bold text-white text-center w-full"
-                                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                                {trip.price
-                                  ? `S/ ${Number(trip.price).toFixed(1)}`
-                                  : "Ver precio"}
+                              {/* Botón de Precio — neutro por defecto, color de empresa al hover */}
+                              <div
+                                className="mt-2 px-3 py-1.5 rounded-xl text-xs font-extrabold text-center w-full flex items-center justify-center gap-1 cursor-pointer select-none active:scale-95"
+                                style={{
+                                  background: "linear-gradient(135deg, #1e293b, #0f172a)",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  color: "#94a3b8",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+                                  transition: "all 0.25s ease",
+                                }}
+                                onMouseEnter={e => {
+                                  const el = e.currentTarget;
+                                  el.style.background = `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`;
+                                  el.style.color = "#ffffff";
+                                  el.style.borderColor = `${primaryColor}60`;
+                                  el.style.boxShadow = `0 4px 14px ${primaryColor}40`;
+                                  el.style.transform = "scale(1.04)";
+                                }}
+                                onMouseLeave={e => {
+                                  const el = e.currentTarget;
+                                  el.style.background = "linear-gradient(135deg, #1e293b, #0f172a)";
+                                  el.style.color = "#94a3b8";
+                                  el.style.borderColor = "rgba(255,255,255,0.1)";
+                                  el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.4)";
+                                  el.style.transform = "scale(1)";
+                                }}
+                              >
+                                <span>{trip.price ? `S/ ${Number(trip.price).toFixed(2)}` : "Ver Precio"}</span>
+                                <ArrowRight className="w-3 h-3 shrink-0" />
                               </div>
                             </div>
                           </div>
@@ -828,13 +1362,125 @@ export default function EmpresaPublicaPage() {
               </div>
             </div>
           )}
+          {/* ── SECCIÓN: MAPA DE FLOTAS ─────────────────────────────────── */}
+          {activeSection === "mapa" && (
+            <div className="space-y-4">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <MapPin className="w-5 h-5" style={{ color: "#3b82f6" }} />
+                    Mapa de Flotas
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse ml-1"
+                      style={{ background: "rgba(59,130,246,0.2)", color: "#93c5fd", border: "1px solid rgba(59,130,246,0.3)" }}>
+                      EN VIVO
+                    </span>
+                  </h2>
+                  <p className="text-slate-400 text-sm mt-0.5">
+                    Vehículos y rutas de <span className="text-white font-medium">{company.tradeName}</span>
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setMapaViajes([]); setMapaRutas([]); setRutaSeleccionada(null); loadMapaViajes(); }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium border border-white/10 text-slate-400 hover:text-white hover:border-white/25 transition-all">
+                  🔄 Actualizar
+                </button>
+              </div>
+
+              {/* Mapa */}
+              <div className="rounded-2xl overflow-hidden border border-white/8"
+                style={{ height: "560px", background: "#0f172a" }}>
+                {mapaLoading ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="w-10 h-10 border-2 border-blue-500/40 border-t-blue-500 rounded-full animate-spin mx-auto mb-3" />
+                      <p className="text-slate-400 text-sm">Cargando mapa de flotas...</p>
+                    </div>
+                  </div>
+                ) : (
+                  <MapaInteractivo
+                    viajes={mapaViajes}
+                    seleccionado={mapaSeleccionado}
+                    onSeleccionar={setMapaSeleccionado}
+                    rutas={mapaRutas}
+                    rutaSeleccionada={rutaSeleccionada}
+                    onSeleccionarRuta={setRutaSeleccionada}
+                  />
+                )}
+              </div>
+
+              {/* Panel inferior: Vehículos en vivo */}
+              {mapaViajes.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse inline-block" />
+                    Unidades activas
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {mapaViajes.map(v => (
+                      <button key={v.id}
+                        onClick={() => setMapaSeleccionado(v)}
+                        className={`text-left p-2.5 rounded-xl border transition-all ${
+                          mapaSeleccionado?.id === v.id
+                            ? "border-blue-500/50 bg-blue-500/10"
+                            : "border-white/8 bg-slate-900/60 hover:border-white/20"
+                        }`}>
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${v.estado ? "bg-emerald-400 animate-pulse" : "bg-slate-500"}`} />
+                          <span className="text-white text-[11px] font-bold truncate">{v.categoria.toUpperCase()}</span>
+                        </div>
+                        <p className="text-slate-300 text-[10px] truncate">{v.origen} → {v.destino}</p>
+                        {v.pasajerosRestantes !== undefined && (
+                          <p className="text-slate-600 text-[10px] mt-0.5">{v.pasajerosRestantes} asientos</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Panel inferior: Rutas de la red */}
+              {mapaRutas.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 inline-block" />
+                    Red de rutas
+                  </p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {mapaRutas.map((r, ri) => {
+                      const colors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16'];
+                      const color = r.color || colors[ri % colors.length];
+                      return (
+                        <button key={r.id}
+                          onClick={() => setRutaSeleccionada(r)}
+                          className={`text-left p-2.5 rounded-xl border transition-all ${
+                            rutaSeleccionada?.id === r.id
+                              ? "border-purple-500/50 bg-purple-500/10"
+                              : "border-white/8 bg-slate-900/60 hover:border-white/20"
+                          }`}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="w-3 h-1.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                            <span className="text-white text-[11px] font-bold truncate">{r.nombre}</span>
+                          </div>
+                          <p className="text-slate-500 text-[10px]">{r.estaciones.length} paradas</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── SECCIONES ADMINISTRATIVAS (SPA) ─────────────────────────── */}
-          {activeSection === "admin-dashboard" && <AdminDashboard />}
-          {activeSection === "admin-venta" && <AdminVenta />}
-          {activeSection === "admin-viajes" && <AdminViajes />}
-          {activeSection === "admin-rutas" && <AdminRutas />}
-          {activeSection === "admin-vehiculos" && <AdminVehiculos />}
-          {activeSection === "admin-perfil" && <AdminPerfil />}
+          {isCompanyStaff && activeSection === "admin-dashboard" && <AdminDashboard />}
+          {isCompanyStaff && activeSection === "admin-venta" && <AdminVenta />}
+          {isCompanyStaff && activeSection === "admin-viajes" && <AdminViajes />}
+          {isCompanyStaff && activeSection === "admin-rutas" && <AdminRutas />}
+          {isCompanyStaff && activeSection === "admin-vehiculos" && <AdminVehiculos />}
+          {isCompanyStaff && activeSection === "admin-vendedores" && <AdminVendedores />}
+          {isCompanyStaff && activeSection === "admin-perfil" && <AdminPerfil />}
+
 
         </main>
       </div>

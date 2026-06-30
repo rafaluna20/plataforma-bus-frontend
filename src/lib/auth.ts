@@ -8,9 +8,10 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
-  role: "SUPER_ADMIN" | "ADMIN" | "DRIVER" | "PASSENGER";
+  role: "SUPER_ADMIN" | "ADMIN" | "DRIVER" | "PASSENGER" | "AGENCY_SELLER";
   balance: number;
   companyId?: string;
+  station?: { id: string; name: string; city: string } | null;
 }
 
 // ─── Token Management ─────────────────────────────────────────────────────────

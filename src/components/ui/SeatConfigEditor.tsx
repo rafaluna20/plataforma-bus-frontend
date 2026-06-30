@@ -10,7 +10,7 @@
  *  - Ruedas arriba y abajo
  */
 
-import { useState, useCallback, memo, useMemo } from "react";
+import { useState, useCallback, useEffect, memo, useMemo } from "react";
 import {
   Settings2, RotateCcw, ChevronDown, ChevronUp,
   Pencil, CheckCircle2, Layers,
@@ -350,9 +350,11 @@ function BusMap({
 type SeatConfigEditorProps = {
   vehicleType: string;
   onChange: (template: SeatTemplate, capacity: number) => void;
+  /** Template existente para cargar al editar un vehículo */
+  value?: SeatTemplate | null;
 };
 
-export default function SeatConfigEditor({ vehicleType, onChange }: SeatConfigEditorProps) {
+export default function SeatConfigEditor({ vehicleType, onChange, value }: SeatConfigEditorProps) {
   const [template, setTemplate] = useState<SeatTemplate | null>(null);
   const [floor2Count, setFloor2Count] = useState(44);
   const [bus1pCount, setBus1pCount] = useState(44);
@@ -360,6 +362,27 @@ export default function SeatConfigEditor({ vehicleType, onChange }: SeatConfigEd
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [activeFloor, setActiveFloor] = useState<1 | 2>(1);
+
+  // Cargar template existente cuando se abre el formulario de edición
+  useEffect(() => {
+    if (value && value.seats && value.seats.length > 0) {
+      // Sincronizar contadores a partir del template guardado
+      if (value.vehicleType === "BUS_2P") {
+        const f2 = value.seats.filter(s => s.floor === 2).length;
+        setFloor2Count(f2 > 0 ? f2 : 44);
+      } else if (value.vehicleType === "BUS_1P") {
+        setBus1pCount(value.totalSeats || 44);
+      } else if (value.vehicleType === "MINIVAN") {
+        setMinivanCount(value.totalSeats || 12);
+      }
+      setTemplate(value);
+      // No llamamos onChange aquí para no sobrescribir el valor original al cargar
+    } else {
+      // Si no hay value (crear), resetear
+      setTemplate(null);
+      setExpanded(false);
+    }
+  }, [value]);
 
   const buildTemplate = useCallback((): SeatTemplate => {
     if (vehicleType === "BUS_2P") return buildBus2P(floor2Count);
@@ -370,9 +393,15 @@ export default function SeatConfigEditor({ vehicleType, onChange }: SeatConfigEd
 
   const handleExpand = () => {
     if (!expanded) {
-      const t = buildTemplate();
-      setTemplate(t);
-      onChange(t, t.totalSeats);
+      // Si no hay template (ni cargado desde value, ni generado antes), generar uno nuevo
+      if (!template) {
+        const t = buildTemplate();
+        setTemplate(t);
+        onChange(t, t.totalSeats);
+      } else {
+        // Hay template existente (cargado desde value o generado previamente); notificar sin regenerar
+        onChange(template, template.totalSeats);
+      }
     }
     setExpanded(v => !v);
   };

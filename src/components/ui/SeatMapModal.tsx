@@ -4,18 +4,37 @@ import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import {
   X, CheckCircle2, AlertCircle, Loader2,
   Banknote, CreditCard, ArrowRight, Pencil, Package, TicketCheck, Save, RotateCcw,
-  Users, RefreshCw, MapPin
+  Users, RefreshCw, MapPin, Printer
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 import { API_URL, calcTripPrice } from "@/lib/config";
 import TicketModal from "@/components/trips/TicketModal";
+import ParcelModal from "@/components/trips/ParcelModal";
+import { printPassengerManifest, printParcelManifest } from "@/lib/printUtils";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
   id: string;
   stopOrder: number;
   basePrice: number;
+  basePriceFloor1?: number | null;
   station: { id: string; name: string; city: string };
+};
+
+type ManifestParcel = {
+  id: string;
+  senderName: string;
+  senderDoc: string;
+  receiverName: string;
+  receiverDoc: string;
+  description: string | null;
+  weightKg: number | null;
+  totalPrice: number;
+  status: string;
+  paymentStatus: string;
+  createdAt: string;
+  startWaypoint: { station: { name: string } };
+  endWaypoint: { station: { name: string } };
 };
 
 type SeatMapModalProps = {
@@ -34,18 +53,23 @@ type SeatMapModalProps = {
   companyRuc?: string;
   routeName: string;
   departureTime: string;
+  plateNumber?: string;
   onSaleSuccess?: (receipt: any) => void;
 };
 
 // ─── Helpers (fuera del componente para no recrearse) ─────────────────────────
-function calcPrice(waypoints: Waypoint[], startId: string, endId: string): number {
+function calcPrice(waypoints: Waypoint[], startId: string, endId: string, floor: 1 | 2 = 2): number {
   const startWp = waypoints.find(w => w.id === startId);
   const endWp = waypoints.find(w => w.id === endId);
   if (!startWp || !endWp) return 0;
   let price = 0;
   for (const wp of waypoints) {
     if (wp.stopOrder > startWp.stopOrder && wp.stopOrder <= endWp.stopOrder) {
-      price += Number(wp.basePrice);
+      const segmentPrice =
+        floor === 1 && wp.basePriceFloor1 != null
+          ? Number(wp.basePriceFloor1)
+          : Number(wp.basePrice);
+      price += segmentPrice;
     }
   }
   return price;
@@ -488,12 +512,14 @@ type ManifestPassenger = {
 // ─── Modal de venta ───────────────────────────────────────────────────────────
 function SaleModal({
   open, onClose, seatId, seatLabel, tripId, waypoints,
-  primaryColor, secondaryColor, price, onSuccess,
+  primaryColor, secondaryColor, price, onSuccess, seatFloor,
   companyName, companyLogoUrl, companyRuc, departureTime, origin, destination,
 }: {
   open: boolean; onClose: () => void; seatId: string; seatLabel: string; tripId: string;
   waypoints: Waypoint[]; primaryColor: string; secondaryColor: string;
   price: number; onSuccess: (booking: any) => void;
+  /** Piso del asiento seleccionado (1 = piso 1/VIP, 2 = piso 2/estándar, 0 = no aplica) */
+  seatFloor: 0 | 1 | 2;
   companyName: string; companyLogoUrl?: string; companyRuc?: string;
   departureTime: string; origin: string; destination: string;
 }) {
@@ -523,7 +549,8 @@ function SaleModal({
 
   if (!open) return null;
 
-  const tramePrice = calcPrice(waypoints, startWpId, endWpId);
+  const floor = seatFloor === 1 ? 1 : 2;
+  const tramePrice = calcPrice(waypoints, startWpId, endWpId, floor);
   const displayPrice = tramePrice > 0 ? tramePrice.toFixed(2) : price.toFixed(2);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -670,7 +697,7 @@ function SaleModal({
                   style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
                   <span className="text-slate-400 text-xs">Precio del tramo</span>
                   <span className="font-extrabold text-xl" style={{ color: primaryColor }}>
-                    S/ {tramePrice > 0 ? tramePrice.toFixed(2) : "0.00"}
+                    S/ {tramePrice > 0 ? tramePrice.toFixed(2) : price.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -755,7 +782,7 @@ export default function SeatMapModal({
   open, onClose, tripId, vehicleType, vehicleCapacity,
   seatTemplate,
   occupiedSeats: initialOccupied, waypoints, primaryColor, secondaryColor,
-  companyName, companyLogoUrl, companyRuc, departureTime, onSaleSuccess,
+  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, onSaleSuccess,
 }: SeatMapModalProps) {
 
   const isTwoDeck = vehicleType === "BUS_2P";
@@ -768,6 +795,7 @@ export default function SeatMapModal({
 
   const [occupied, setOccupied] = useState<string[]>(initialOccupied);
   const [selectedSeat, setSelectedSeat] = useState<string>("");
+  const [selectedSeatFloor, setSelectedSeatFloor] = useState<0 | 1 | 2>(0);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<"pasajes" | "encomiendas" | "pasajeros">("pasajes");
   const [editMode, setEditMode] = useState(false);
@@ -778,6 +806,13 @@ export default function SeatMapModal({
   const [loadingPassengers, setLoadingPassengers] = useState(false);
   const [passengersError, setPassengersError] = useState("");
 
+  // ─── Estado para lista de encomiendas en sidebar ──────────────────────────
+  const [parcels, setParcels] = useState<ManifestParcel[]>([]);
+  const [loadingParcels, setLoadingParcels] = useState(false);
+  const [parcelsError, setParcelsError] = useState("");
+  const [parcelSearch, setParcelSearch] = useState("");
+  const [parcelModalOpen, setParcelModalOpen] = useState(false);
+
   // Precio total (memoizado)
   const price = useMemo(
     () => calcPrice(waypoints, waypoints[0]?.id || "", waypoints[waypoints.length - 1]?.id || ""),
@@ -785,6 +820,36 @@ export default function SeatMapModal({
   );
 
   const freeCount = vehicleCapacity - occupied.length;
+
+  const handlePrintPassengers = () => {
+    printPassengerManifest(
+      {
+        companyName,
+        companyRuc,
+        companyLogoUrl,
+        routeName,
+        departureTime,
+        vehicleType,
+        plateNumber,
+      },
+      passengers
+    );
+  };
+
+  const handlePrintParcels = () => {
+    printParcelManifest(
+      {
+        companyName,
+        companyRuc,
+        companyLogoUrl,
+        routeName,
+        departureTime,
+        vehicleType,
+        plateNumber,
+      },
+      parcels
+    );
+  };
 
   useEffect(() => { setOccupied(initialOccupied); }, [initialOccupied]);
 
@@ -804,8 +869,16 @@ export default function SeatMapModal({
   const handleSeatClick = useCallback((id: string) => {
     if (editMode) return;
     setSelectedSeat(id);
+    // Determinar el piso del asiento desde el seatTemplate
+    if (seatTemplate) {
+      const raw = Array.isArray(seatTemplate) ? seatTemplate : (seatTemplate.seats ?? []);
+      const seatData = raw.find((s: any) => s.id === id);
+      setSelectedSeatFloor((seatData?.floor as 0 | 1 | 2) ?? 0);
+    } else {
+      setSelectedSeatFloor(0);
+    }
     setSaleModalOpen(true);
-  }, [editMode]);
+  }, [editMode, seatTemplate]);
 
   const handleLabelChange = useCallback((id: string, val: string) => {
     setSeatLabels(prev => ({ ...prev, [id]: val }));
@@ -828,12 +901,69 @@ export default function SeatMapModal({
     }
   }, [tripId]);
 
-  // Cargar pasajeros cuando se activa esa pestaña
+  // Cargar pasajeros al abrir el modal o cambiar de pestaña
   useEffect(() => {
-    if (sidebarMode === "pasajeros" && open) {
+    if (open) {
       loadPassengers();
     }
   }, [sidebarMode, open, loadPassengers]);
+
+  // ─── Carga de encomiendas ─────────────────────────────────────────────────
+  const loadParcels = useCallback(async () => {
+    if (!tripId) return;
+    setLoadingParcels(true);
+    setParcelsError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al cargar encomiendas");
+      setParcels(data.parcels || []);
+    } catch (e: any) {
+      setParcelsError(e.message);
+    } finally {
+      setLoadingParcels(false);
+    }
+  }, [tripId]);
+
+  // Cargar encomiendas cuando se activa esa pestaña
+  useEffect(() => {
+    if (sidebarMode === "encomiendas" && open) {
+      loadParcels();
+    }
+  }, [sidebarMode, open, loadParcels]);
+
+  // Actualizar estado de encomienda
+  const handleParcelStatusChange = async (parcelId: string, newStatus: string) => {
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/parcels/${parcelId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Error al actualizar estado");
+      }
+      setParcels(prev =>
+        prev.map(p => (p.id === parcelId ? { ...p, status: newStatus } : p))
+      );
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Filtrado de encomiendas
+  const filteredParcels = useMemo(() => {
+    if (!parcelSearch.trim()) return parcels;
+    const q = parcelSearch.toLowerCase();
+    return parcels.filter(p =>
+      p.senderName.toLowerCase().includes(q) ||
+      p.receiverName.toLowerCase().includes(q) ||
+      p.senderDoc.toLowerCase().includes(q) ||
+      p.receiverDoc.toLowerCase().includes(q) ||
+      (p.description || "").toLowerCase().includes(q)
+    );
+  }, [parcels, parcelSearch]);
 
   const handleSaleSuccess = useCallback((booking: any) => {
     setOccupied(prev => [...prev, booking.seatId ?? selectedSeat]);
@@ -1002,15 +1132,25 @@ export default function SeatMapModal({
             {sidebarMode === "pasajeros" && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Lista</p>
-                  <button
-                    onClick={loadPassengers}
-                    disabled={loadingPassengers}
-                    className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
-                    title="Actualizar"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${loadingPassengers ? "animate-spin" : ""}`} />
-                  </button>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Pasajeros ({passengers.length})</p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrintPassengers}
+                      disabled={loadingPassengers || passengers.length === 0}
+                      className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+                      title="Imprimir Manifiesto"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={loadPassengers}
+                      disabled={loadingPassengers}
+                      className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+                      title="Actualizar"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${loadingPassengers ? "animate-spin" : ""}`} />
+                    </button>
+                  </div>
                 </div>
 
                 {loadingPassengers && (
@@ -1082,13 +1222,130 @@ export default function SeatMapModal({
 
             {/* ── Modo: Encomiendas ── */}
             {sidebarMode === "encomiendas" && (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Encomiendas</p>
-                <div className="mt-4 p-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
-                  <Package className="w-6 h-6 text-amber-400 mb-2" />
-                  <p className="text-xs text-amber-400 font-semibold">Próximamente</p>
-                  <p className="text-xs text-slate-500 mt-1">Registro y seguimiento de encomiendas</p>
+              <div className="space-y-3 flex flex-col h-full">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Encomiendas ({parcels.length})</p>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={handlePrintParcels}
+                      disabled={loadingParcels || parcels.length === 0}
+                      className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+                      title="Imprimir Manifiesto"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={loadParcels}
+                      disabled={loadingParcels}
+                      className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
+                      title="Actualizar"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${loadingParcels ? "animate-spin" : ""}`} />
+                    </button>
+                    <button
+                      onClick={() => setParcelModalOpen(true)}
+                      className="px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold transition-all"
+                    >
+                      + Registrar
+                    </button>
+                  </div>
                 </div>
+
+                {/* Buscador */}
+                <input
+                  type="text"
+                  value={parcelSearch}
+                  onChange={e => setParcelSearch(e.target.value)}
+                  placeholder="Buscar remitente, dest..."
+                  className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-slate-700 transition-colors"
+                />
+
+                {loadingParcels && (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                  </div>
+                )}
+
+                {parcelsError && !loadingParcels && (
+                  <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                    {parcelsError}
+                  </div>
+                )}
+
+                {!loadingParcels && !parcelsError && filteredParcels.length === 0 && (
+                  <div className="text-center py-6 border border-dashed border-white/5 rounded-xl">
+                    <Package className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                    <p className="text-xs text-slate-500">Sin encomiendas</p>
+                    <button
+                      onClick={() => setParcelModalOpen(true)}
+                      className="mt-2 text-[10px] text-amber-400 hover:underline animate-pulse"
+                    >
+                      Registrar primera
+                    </button>
+                  </div>
+                )}
+
+                {!loadingParcels && filteredParcels.length > 0 && (
+                  <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
+                    {filteredParcels.map((p) => {
+                      const isPaid = p.paymentStatus === "PAID_DIGITAL" || p.paymentStatus === "PAID";
+                      return (
+                        <div
+                          key={p.id}
+                          className="rounded-lg p-2 border border-white/5 hover:border-white/10 transition-all flex flex-col gap-1.5"
+                          style={{ background: "rgba(255,255,255,0.02)" }}
+                        >
+                          <div className="flex items-start gap-1.5">
+                            <div className="w-6 h-6 rounded bg-amber-500/10 flex items-center justify-center flex-shrink-0 text-amber-400">
+                              <Package className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className="text-white text-xs font-semibold truncate">{p.senderName}</p>
+                                <span className="text-[10px] font-extrabold text-amber-400">S/ {Number(p.totalPrice).toFixed(2)}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 truncate">Dest: {p.receiverName}</p>
+                            </div>
+                          </div>
+
+                          {/* Tramo */}
+                          <div className="flex items-center gap-1 text-[9px] text-slate-500 bg-black/20 p-1 rounded">
+                            <MapPin className="w-2.5 h-2.5 text-amber-500" />
+                            <span className="truncate max-w-[65px]">{p.startWaypoint?.station?.name}</span>
+                            <ArrowRight className="w-2 h-2" />
+                            <span className="truncate max-w-[65px]">{p.endWaypoint?.station?.name}</span>
+                          </div>
+
+                          {/* Detalles del paquete */}
+                          {(p.description || p.weightKg) && (
+                            <p className="text-[9px] text-slate-500 italic truncate">
+                              {p.description && `${p.description}`}
+                              {p.description && p.weightKg && " · "}
+                              {p.weightKg && `${p.weightKg} kg`}
+                            </p>
+                          )}
+
+                          {/* Selector de estado y pago */}
+                          <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-white/5">
+                            <span className="text-[9px] font-medium" style={{ color: isPaid ? "#10b981" : "#f59e0b" }}>
+                              {isPaid ? "Pagado" : "Cobro destino"}
+                            </span>
+                            <select
+                              value={p.status}
+                              onChange={(e) => handleParcelStatusChange(p.id, e.target.value)}
+                              className="bg-slate-900 border border-white/10 rounded px-1 py-0.5 text-[9px] text-slate-300 focus:outline-none focus:border-amber-500/50 cursor-pointer"
+                            >
+                              <option value="RECEIVED">Recibido</option>
+                              <option value="IN_TRANSIT">En viaje</option>
+                              <option value="READY_FOR_PICKUP">Listo retirar</option>
+                              <option value="DELIVERED">Entregado</option>
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1172,7 +1429,7 @@ export default function SeatMapModal({
       {/* ─── MODAL DE VENTA ──────────────────────────────────────────────────── */}
       <SaleModal
         open={saleModalOpen && sidebarMode === "pasajes"}
-        onClose={() => { setSaleModalOpen(false); setSelectedSeat(""); }}
+        onClose={() => { setSaleModalOpen(false); setSelectedSeat(""); setSelectedSeatFloor(0); }}
         seatId={selectedSeat}
         seatLabel={seatLabels[selectedSeat] ?? selectedSeat.replace(/\D/g, "")}
         tripId={tripId}
@@ -1181,6 +1438,7 @@ export default function SeatMapModal({
         secondaryColor={secondaryColor}
         price={price}
         onSuccess={handleSaleSuccess}
+        seatFloor={selectedSeatFloor}
         companyName={companyName}
         companyLogoUrl={companyLogoUrl}
         companyRuc={companyRuc}
@@ -1188,6 +1446,18 @@ export default function SeatMapModal({
         origin={origin}
         destination={destination}
       />
+
+      {/* ─── MODAL DE REGISTRO DE ENCOMIENDA ─────────────────────────────────── */}
+      {parcelModalOpen && (
+        <ParcelModal
+          tripId={tripId}
+          waypoints={waypoints}
+          primaryColor={primaryColor}
+          secondaryColor={secondaryColor}
+          onClose={() => setParcelModalOpen(false)}
+          onSuccess={loadParcels}
+        />
+      )}
     </div>
   );
 }

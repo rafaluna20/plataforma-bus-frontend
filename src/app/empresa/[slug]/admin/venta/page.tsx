@@ -7,6 +7,7 @@ import {
   Loader2, Banknote, CreditCard, Printer, RefreshCw, X, Ticket
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 import TicketModal from "@/components/trips/TicketModal";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -68,6 +69,9 @@ export default function EmpresaAdminVentaPage() {
   const [companyRuc, setCompanyRuc] = useState("");
   const [companyLogoUrl, setCompanyLogoUrl] = useState<string | undefined>(undefined);
 
+  // Usuario actual
+  const [currentUser, setCurrentUser] = useState<ReturnType<typeof getCurrentUser>>(null);
+
   // Viajes
   const [trips, setTrips] = useState<TripItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,6 +106,7 @@ export default function EmpresaAdminVentaPage() {
   const [lastPassengerDoc, setLastPassengerDoc] = useState("");
 
   useEffect(() => {
+    setCurrentUser(getCurrentUser());
     loadCompany();
   }, [slugStr]);
 
@@ -168,7 +173,14 @@ export default function EmpresaAdminVentaPage() {
         setOccupiedSeats(data.occupiedSeats || []);
         const wps = data.trip?.route?.waypoints || trip.route.waypoints;
         if (wps.length >= 2) {
-          setStartWaypointId(wps[0].id);
+          // Si es AGENCY_SELLER y tiene estación, preseleccionar origen
+          let initialStart = wps[0].id;
+          if (currentUser?.role === 'AGENCY_SELLER' && currentUser?.station?.id) {
+            const userStationId = currentUser.station.id;
+            const wpMatch = wps.find((w: any) => w.station.id === userStationId);
+            if (wpMatch) initialStart = wpMatch.id;
+          }
+          setStartWaypointId(initialStart);
           setEndWaypointId(wps[wps.length - 1].id);
         }
       }
@@ -566,7 +578,8 @@ export default function EmpresaAdminVentaPage() {
                       <div>
                         <label className="text-xs text-slate-400 mb-1 block">Desde *</label>
                         <select value={startWaypointId} onChange={e => setStartWaypointId(e.target.value)}
-                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none">
+                          disabled={currentUser?.role === 'AGENCY_SELLER' && !!currentUser?.station}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none disabled:opacity-70">
                           {waypoints.map(wp => <option key={wp.id} value={wp.id}>{wp.station.name}</option>)}
                         </select>
                       </div>

@@ -27,6 +27,7 @@ type CompanyBranding = {
   website: string | null;
   description: string | null;
   contactEmail: string | null;
+  sliderImages: string[] | null;
 };
 
 export default function EmpresaBrandingPage() {
@@ -50,6 +51,7 @@ export default function EmpresaBrandingPage() {
     website: "",
     description: "",
     contactEmail: "",
+    sliderImages: [] as string[],
   });
 
   useEffect(() => {
@@ -76,6 +78,7 @@ export default function EmpresaBrandingPage() {
         website: c.website || "",
         description: c.description || "",
         contactEmail: c.contactEmail || "",
+        sliderImages: c.sliderImages || [],
       });
     } catch (e: any) {
       setError(e.message);
@@ -262,6 +265,32 @@ export default function EmpresaBrandingPage() {
               fit="cover"
               hint="Recomendado: 1200×300px. Se recortará automáticamente al centro. Máx ~150KB."
             />
+
+            {/* Slider Images */}
+            <div className="space-y-4">
+              <label className="text-xs text-slate-400 font-medium block">Imágenes para el Slider Principal (Página Pública)</label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="space-y-2">
+                    <p className="text-xs font-semibold text-slate-500">Imagen {index + 1}</p>
+                    <ImageUploader
+                      label={`Subir Imagen ${index + 1}`}
+                      value={form.sliderImages[index] || ""}
+                      onChange={url => {
+                        const newImages = [...form.sliderImages];
+                        newImages[index] = url;
+                        setForm(f => ({ ...f, sliderImages: newImages }));
+                      }}
+                      maxWidth={1920}
+                      maxHeight={1080}
+                      quality={0.85}
+                      fit="cover"
+                      hint="1920x1080px (Alta calidad)"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {/* Descripción */}
             <div>
