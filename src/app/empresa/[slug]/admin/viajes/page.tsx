@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Bus, Plus, AlertCircle, CheckCircle2, RefreshCw,
-  Clock, ArrowRight, Activity
+  Clock, ArrowRight, Activity, Edit2, X, AlertTriangle, Users
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 
@@ -16,7 +16,7 @@ type Trip = {
   departureTime: string;
   status: string;
   route: { name: string; waypoints: any[] };
-  vehicle: { plateNumber: string; vehicleType: string; capacity: number };
+  vehicle: { id: string; plateNumber: string; vehicleType: string; capacity: number };
 };
 
 type Route = { id: string; name: string };
@@ -53,8 +53,97 @@ export default function EmpresaAdminViajesPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  // Formulario editar viaje
+  const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [editForm, setEditForm] = useState({ vehicleId: "", departureTime: "" });
+  const [editFormError, setEditFormError] = useState("");
+  const [updatingTrip, setUpdatingTrip] = useState(false);
+  const [editBookingsCount, setEditBookingsCount] = useState<number | null>(null);
+  const [loadingBookingsCount, setLoadingBookingsCount] = useState(false);
+
   // Filtro de estado
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
+
+  // Auxiliar para formatear fecha local
+  function formatDateTimeLocal(dateInput: string | Date) {
+    const d = new Date(dateInput);
+    const tzoffset = d.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(d.getTime() - tzoffset)).toISOString().slice(0, 16);
+    return localISOTime;
+  }
+
+  async function handleOpenEdit(trip: Trip) {
+    setEditingTrip(trip);
+    setEditForm({
+      vehicleId: trip.vehicle.id || "",
+      departureTime: formatDateTimeLocal(trip.departureTime),
+    });
+    setEditFormError("");
+    setEditBookingsCount(null);
+    setLoadingBookingsCount(true);
+
+    try {
+      const res = await authFetch(`${API}/api/v1/management/trips/${trip.id}/manifest`);
+      if (res.ok) {
+        const data = await res.json();
+        setEditBookingsCount(data.count || 0);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBookingsCount(false);
+    }
+  }
+
+  async function handleUpdateTrip(e: React.FormEvent) {
+    e.preventDefault();
+    setEditFormError("");
+
+    if (!editingTrip) return;
+    if (!editForm.vehicleId) { setEditFormError("⚠️ Selecciona un vehículo."); return; }
+    if (!editForm.departureTime) { setEditFormError("⚠️ Selecciona la fecha y hora de salida."); return; }
+
+    const selectedDate = new Date(editForm.departureTime);
+    const now = new Date();
+
+    if (selectedDate <= now) {
+      setEditFormError("📅 La fecha de salida debe ser en el futuro.");
+      return;
+    }
+
+    setUpdatingTrip(true);
+    try {
+      const res = await authFetch(`${API}/api/v1/management/trips/${editingTrip.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          vehicleId: editForm.vehicleId,
+          departureTime: editForm.departureTime,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = data.error || "";
+        if (msg.includes("futuro") || msg.includes("fecha")) {
+          setEditFormError("📅 La fecha de salida debe ser en el futuro.");
+        } else if (msg.includes("programado") || msg.includes("conflicto")) {
+          setEditFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
+        } else if (msg.includes("inactivo")) {
+          setEditFormError("🔴 El vehículo seleccionado está inactivo.");
+        } else {
+          setEditFormError(`❌ ${msg || "Error al reprogramar el viaje."}`);
+        }
+        return;
+      }
+      setSuccess("✅ Viaje reprogramado exitosamente");
+      setEditingTrip(null);
+      loadData();
+      setTimeout(() => setSuccess(""), 4000);
+    } catch {
+      setEditFormError("❌ Error de conexión. Verifica que el servidor esté activo.");
+    } finally {
+      setUpdatingTrip(false);
+    }
+  }
 
   useEffect(() => { loadData(); }, [slugStr]);
 
@@ -346,14 +435,117 @@ export default function EmpresaAdminViajesPage() {
                     {st.label}
                   </span>
                 </div>
-                <Link
-                  href={`/empresa/${slugStr}/admin/venta?tripId=${trip.id}`}
-                  className="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25">
-                  Vender
-                </Link>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {trip.status === "SCHEDULED" && (
+                    <button
+                      onClick={() => handleOpenEdit(trip)}
+                      className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"
+                      title="Editar / Reprogramar"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <Link
+                    href={`/empresa/${slugStr}/admin/venta?tripId=${trip.id}`}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25">
+                    Vender
+                  </Link>
+                </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ─── Modal de Edición/Reprogramación ─── */}
+      {editingTrip && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 relative shadow-2xl">
+            <button
+              onClick={() => setEditingTrip(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h2 className="font-bold text-white text-xl flex items-center gap-2 mb-1">
+              <Edit2 className="w-5 h-5 text-indigo-400" />
+              Reprogramar Viaje
+            </h2>
+            <p className="text-xs text-slate-400 mb-4 truncate font-semibold">
+              Ruta: {editingTrip.route?.name}
+            </p>
+
+            {/* Advertencia si hay pasajeros */}
+            {loadingBookingsCount ? (
+              <div className="h-10 bg-slate-800/40 animate-pulse rounded-xl mb-4" />
+            ) : editBookingsCount !== null && editBookingsCount > 0 ? (
+              <div className="flex items-start gap-2.5 p-3.5 bg-amber-500/10 border border-amber-500/25 rounded-xl text-amber-400 text-xs mb-4">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+                <div>
+                  <p className="font-bold">¡Atención! Viaje con reservas activas</p>
+                  <p className="text-slate-400 mt-0.5 leading-relaxed">
+                    Este viaje ya cuenta con <strong>{editBookingsCount} pasajero{editBookingsCount !== 1 ? 's' : ''}</strong>. 
+                    Si continúa con la reprogramación, los pasajes se mantendrán pero deberá notificar a los clientes sobre el cambio de horario o bus.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            <form onSubmit={handleUpdateTrip} className="space-y-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Vehículo *</label>
+                <select
+                  value={editForm.vehicleId}
+                  onChange={e => setEditForm(f => ({ ...f, vehicleId: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
+                  {vehicles.map(v => (
+                    <option key={v.id} value={v.id}>
+                      {v.plateNumber} ({vehicleTypeLabel[v.vehicleType] || v.vehicleType} · {v.capacity} asientos)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Fecha y Hora de Salida *</label>
+                <input
+                  type="datetime-local"
+                  value={editForm.departureTime}
+                  onChange={e => setEditForm(f => ({ ...f, departureTime: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              {editFormError && (
+                <div className="flex items-center gap-2 text-red-400 text-xs p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" /> {editFormError}
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingTrip(null)}
+                  className="px-5 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={updatingTrip}
+                  className="px-6 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center gap-2 transition-all hover:opacity-90"
+                  style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+                >
+                  {updatingTrip ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando...</>
+                  ) : (
+                    "Guardar Cambios"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
