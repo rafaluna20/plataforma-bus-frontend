@@ -7,7 +7,7 @@ import {
   Clock, Users, AlertCircle, ArrowLeft, Search,
   Calendar, ArrowRightLeft, Sparkles, CheckCircle2,
   Info, Route, Menu, X, Settings, Lock, Eye, EyeOff, Loader2,
-  Bell, ChevronDown, ExternalLink, Copy, Check
+  Bell, ChevronDown, ExternalLink, Copy, Check, SlidersHorizontal
 } from "lucide-react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
@@ -178,6 +178,14 @@ export default function EmpresaPublicaPage() {
   const [routeFilter, setRouteFilter] = useState("");
   const [timeFilter, setTimeFilter] = useState("");
   const [searching, setSearching] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Contar filtros secundarios activos
+  const activeFilterCount = [
+    vehicleFilter !== "",
+    routeFilter !== "",
+    timeFilter !== ""
+  ].filter(Boolean).length;
 
   // Estado del mapa embebido
   const [mapaViajes, setMapaViajes] = useState<import('@/components/map/MapaInteractivo').ViajeMapa[]>([]);
@@ -1058,65 +1066,104 @@ export default function EmpresaPublicaPage() {
                   </button>
                 </div>
 
-                {/* Filtros rápidos */}
-                <div className="flex flex-col gap-2 pt-1">
-                  <div className="flex flex-wrap gap-2">
-                    {/* Filtro por tipo de vehículo */}
-                    {Object.entries(vehicleTypeLabel).map(([key, label]) => (
-                      <button key={key} type="button"
-                        onClick={() => setVehicleFilter(vehicleFilter === key ? "" : key)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                          vehicleFilter === key
-                            ? "text-white border-transparent"
-                            : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
-                        }`}
-                        style={vehicleFilter === key ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
-                        🚌 {label}
-                      </button>
-                    ))}
-
-                    {/* Filtro por ruta */}
-                    {uniqueRoutes.length > 0 && (
-                      <select
-                        value={routeFilter}
-                        onChange={e => setRouteFilter(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/50 text-slate-400 focus:outline-none transition-colors">
-                        <option value="">Todas las rutas</option>
-                        {uniqueRoutes.map(r => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
+                {/* Sub-row: Filtros Toggle & Reset */}
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all duration-300 select-none hover:scale-[1.02] active:scale-95"
+                    style={{
+                      borderColor: showFilters ? `${primaryColor}40` : "rgba(255,255,255,0.08)",
+                      background: showFilters ? `${primaryColor}15` : "rgba(255,255,255,0.03)",
+                      color: showFilters ? "#ffffff" : "#94a3b8"
+                    }}
+                  >
+                    <SlidersHorizontal className={`w-3.5 h-3.5 transition-transform duration-300 ${showFilters ? "rotate-90" : ""}`} />
+                    <span>Filtros</span>
+                    {activeFilterCount > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold text-white animate-pulse" style={{ backgroundColor: primaryColor }}>
+                        {activeFilterCount}
+                      </span>
                     )}
-                  </div>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${showFilters ? "rotate-180" : ""}`} />
+                  </button>
 
-                  {/* Filtro de Tiempo */}
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { id: "hoy", label: "Hoy" },
-                      { id: "semana", label: "Última semana" },
-                      { id: "mes", label: "Último mes" },
-                      { id: "ano", label: "Último año" },
-                    ].map(item => (
-                      <button key={item.id} type="button"
-                        onClick={() => setTimeFilter(timeFilter === item.id ? "" : item.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                          timeFilter === item.id
-                            ? "text-white border-transparent"
-                            : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
-                        }`}
-                        style={timeFilter === item.id ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
-                        📅 {item.label}
-                      </button>
-                    ))}
+                  {/* Limpiar filtros */}
+                  {(vehicleFilter || routeFilter || timeFilter || origin || destination || date) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVehicleFilter("");
+                        setRouteFilter("");
+                        setTimeFilter("");
+                        setOrigin("");
+                        setDestination("");
+                        setDate("");
+                        if (company) loadTrips(company.id);
+                      }}
+                      className="px-3 py-2 rounded-xl text-xs font-bold border border-red-500/20 bg-red-500/8 text-red-400 hover:bg-red-500/15 transition-all duration-200 hover:scale-[1.02] active:scale-95"
+                    >
+                      ✕ Limpiar filtros
+                    </button>
+                  )}
+                </div>
 
-                    {/* Limpiar filtros */}
-                    {(vehicleFilter || routeFilter || timeFilter || origin || destination || date) && (
-                      <button type="button"
-                        onClick={() => { setVehicleFilter(""); setRouteFilter(""); setTimeFilter(""); setOrigin(""); setDestination(""); setDate(""); if (company) loadTrips(company.id); }}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-all">
-                        ✕ Limpiar filtros
-                      </button>
-                    )}
+                {/* Filtros rápidos colapsables */}
+                <div
+                  className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                    showFilters ? "max-h-[500px] opacity-100 mt-2 pt-2 border-t border-white/5" : "max-h-0 opacity-0 pointer-events-none"
+                  }`}
+                >
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {/* Filtro por tipo de vehículo */}
+                      {Object.entries(vehicleTypeLabel).map(([key, label]) => (
+                        <button key={key} type="button"
+                          onClick={() => setVehicleFilter(vehicleFilter === key ? "" : key)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                            vehicleFilter === key
+                              ? "text-white border-transparent"
+                              : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                          }`}
+                          style={vehicleFilter === key ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
+                          🚌 {label}
+                        </button>
+                      ))}
+
+                      {/* Filtro por ruta */}
+                      {uniqueRoutes.length > 0 && (
+                        <select
+                          value={routeFilter}
+                          onChange={e => setRouteFilter(e.target.value)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-700 bg-slate-800/50 text-slate-400 focus:outline-none transition-colors">
+                          <option value="">Todas las rutas</option>
+                          {uniqueRoutes.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+
+                    {/* Filtro de Tiempo */}
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { id: "hoy", label: "Hoy" },
+                        { id: "semana", label: "Última semana" },
+                        { id: "mes", label: "Último mes" },
+                        { id: "ano", label: "Último año" },
+                      ].map(item => (
+                        <button key={item.id} type="button"
+                          onClick={() => setTimeFilter(timeFilter === item.id ? "" : item.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                            timeFilter === item.id
+                              ? "text-white border-transparent"
+                              : "bg-slate-800/50 border-slate-700 text-slate-400 hover:text-white"
+                          }`}
+                          style={timeFilter === item.id ? { background: `${primaryColor}30`, borderColor: primaryColor, color: primaryColor } : {}}>
+                          📅 {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </form>
