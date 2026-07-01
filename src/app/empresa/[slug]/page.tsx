@@ -289,9 +289,9 @@ export default function EmpresaPublicaPage() {
       setLoginEmail("");
       setLoginPassword("");
       
-      // Redirigir al panel de administración si es admin
-      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN")) {
-        router.push(`/empresa/${slug}/admin`);
+      // Activar panel admin dentro de la misma SPA (no redirigir a ruta inexistente)
+      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "AGENCY_SELLER")) {
+        setActiveSection("admin-dashboard");
       }
     } catch (err: any) {
       setLoginError(err.message || "Credenciales incorrectas.");
