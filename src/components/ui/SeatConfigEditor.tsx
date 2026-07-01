@@ -239,7 +239,7 @@ const SeatCell = memo(function SeatCell({
   );
 });
 
-// ─── AutoMap — Layout realista de sedan 4 asientos ───────────────────────────
+// ─── AutoMap — Vista de planta (top-down) horizontal, frente a la izquierda ──
 function AutoMap({
   seats, editingId, onToggle, onStartEdit, onLabelChange, onFinishEdit,
 }: {
@@ -268,88 +268,252 @@ function AutoMap({
     );
   }
 
+  // Dimensiones del SVG: ancho=420, alto=200 (horizontal, frente a la izquierda)
+  const W = 420, H = 200;
+
   return (
     <div className="flex flex-col items-center gap-3 select-none">
-      {/* Carrocería del auto */}
-      <div className="relative" style={{ width: 260 }}>
+      {/* Contenedor del auto en planta */}
+      <div className="relative" style={{ width: W, height: H }}>
 
-        {/* SVG silueta del auto sedan */}
-        <svg viewBox="0 0 260 160" width="260" height="160" className="absolute inset-0 pointer-events-none">
-          {/* Cuerpo principal */}
-          <rect x="10" y="70" width="240" height="70" rx="18" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-          {/* Techo / cabina */}
-          <path d="M55 70 Q70 28 100 22 L160 22 Q190 28 205 70 Z" fill="#1e293b" stroke="#475569" strokeWidth="2" />
-          {/* Parabrisas delantero */}
-          <path d="M60 68 Q72 36 100 28 L160 28 Q188 36 200 68 Z" fill="#0f172a" stroke="#334155" strokeWidth="1.5" opacity="0.8" />
-          {/* Ventana trasera izq */}
-          <path d="M62 68 Q68 44 90 32 L100 28 Q72 36 60 68 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1" opacity="0.6" />
-          {/* Ventana trasera der */}
-          <path d="M198 68 Q192 44 170 32 L160 28 Q188 36 200 68 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1" opacity="0.6" />
-          {/* Rueda delantera */}
-          <circle cx="68" cy="140" r="18" fill="#0f172a" stroke="#475569" strokeWidth="3" />
-          <circle cx="68" cy="140" r="8" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-          <line x1="68" y1="122" x2="68" y2="132" stroke="#475569" strokeWidth="1.5" />
-          <line x1="68" y1="148" x2="68" y2="158" stroke="#475569" strokeWidth="1.5" />
-          <line x1="50" y1="140" x2="60" y2="140" stroke="#475569" strokeWidth="1.5" />
-          <line x1="76" y1="140" x2="86" y2="140" stroke="#475569" strokeWidth="1.5" />
-          {/* Rueda trasera */}
-          <circle cx="192" cy="140" r="18" fill="#0f172a" stroke="#475569" strokeWidth="3" />
-          <circle cx="192" cy="140" r="8" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
-          <line x1="192" y1="122" x2="192" y2="132" stroke="#475569" strokeWidth="1.5" />
-          <line x1="192" y1="148" x2="192" y2="158" stroke="#475569" strokeWidth="1.5" />
-          <line x1="174" y1="140" x2="184" y2="140" stroke="#475569" strokeWidth="1.5" />
-          <line x1="200" y1="140" x2="210" y2="140" stroke="#475569" strokeWidth="1.5" />
-          {/* Faro delantero */}
-          <ellipse cx="22" cy="95" rx="8" ry="5" fill="#fbbf24" opacity="0.7" />
-          {/* Faro trasero */}
-          <ellipse cx="238" cy="95" rx="8" ry="5" fill="#ef4444" opacity="0.7" />
-          {/* Línea separadora de puertas */}
-          <line x1="130" y1="70" x2="130" y2="118" stroke="#475569" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.5" />
-          {/* Manija puerta delantera */}
-          <rect x="95" y="95" width="14" height="4" rx="2" fill="#475569" opacity="0.7" />
-          {/* Manija puerta trasera */}
-          <rect x="151" y="95" width="14" height="4" rx="2" fill="#475569" opacity="0.7" />
+        {/* ── SVG realista del auto en vista de planta (top-down) ── */}
+        <svg
+          viewBox={`0 0 ${W} ${H}`}
+          width={W}
+          height={H}
+          className="absolute inset-0 pointer-events-none"
+          style={{ overflow: "visible" }}
+        >
+          <defs>
+            {/* Gradiente carrocería */}
+            <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="50%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#334155" />
+            </linearGradient>
+            {/* Gradiente techo/cabina */}
+            <linearGradient id="roofGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0f172a" />
+              <stop offset="50%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </linearGradient>
+            {/* Gradiente capó */}
+            <linearGradient id="hoodGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="60%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+            {/* Gradiente maletero */}
+            <linearGradient id="trunkGrad" x1="1" y1="0" x2="0" y2="0">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="60%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+            {/* Gradiente rueda */}
+            <radialGradient id="wheelGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="60%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </radialGradient>
+            {/* Sombra suave */}
+            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.5" />
+            </filter>
+          </defs>
+
+          {/* ── Ruedas (debajo de la carrocería) ── */}
+          {/* Rueda delantera superior */}
+          <g transform="translate(72, 14)">
+            <rect x="-14" y="-8" width="28" height="36" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+            <rect x="-9" y="-3" width="18" height="26" rx="4" fill="url(#wheelGrad)" />
+            <circle cx="0" cy="10" r="5" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-1" x2="0" y2="5" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="15" x2="0" y2="21" stroke="#64748b" strokeWidth="1" />
+            <line x1="-6" y1="10" x2="-1" y2="10" stroke="#64748b" strokeWidth="1" />
+            <line x1="1" y1="10" x2="6" y2="10" stroke="#64748b" strokeWidth="1" />
+          </g>
+          {/* Rueda delantera inferior */}
+          <g transform="translate(72, 186)">
+            <rect x="-14" y="-28" width="28" height="36" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+            <rect x="-9" y="-23" width="18" height="26" rx="4" fill="url(#wheelGrad)" />
+            <circle cx="0" cy="-10" r="5" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-21" x2="0" y2="-15" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-5" x2="0" y2="1" stroke="#64748b" strokeWidth="1" />
+            <line x1="-6" y1="-10" x2="-1" y2="-10" stroke="#64748b" strokeWidth="1" />
+            <line x1="1" y1="-10" x2="6" y2="-10" stroke="#64748b" strokeWidth="1" />
+          </g>
+          {/* Rueda trasera superior */}
+          <g transform="translate(348, 14)">
+            <rect x="-14" y="-8" width="28" height="36" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+            <rect x="-9" y="-3" width="18" height="26" rx="4" fill="url(#wheelGrad)" />
+            <circle cx="0" cy="10" r="5" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-1" x2="0" y2="5" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="15" x2="0" y2="21" stroke="#64748b" strokeWidth="1" />
+            <line x1="-6" y1="10" x2="-1" y2="10" stroke="#64748b" strokeWidth="1" />
+            <line x1="1" y1="10" x2="6" y2="10" stroke="#64748b" strokeWidth="1" />
+          </g>
+          {/* Rueda trasera inferior */}
+          <g transform="translate(348, 186)">
+            <rect x="-14" y="-28" width="28" height="36" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+            <rect x="-9" y="-23" width="18" height="26" rx="4" fill="url(#wheelGrad)" />
+            <circle cx="0" cy="-10" r="5" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-21" x2="0" y2="-15" stroke="#64748b" strokeWidth="1" />
+            <line x1="0" y1="-5" x2="0" y2="1" stroke="#64748b" strokeWidth="1" />
+            <line x1="-6" y1="-10" x2="-1" y2="-10" stroke="#64748b" strokeWidth="1" />
+            <line x1="1" y1="-10" x2="6" y2="-10" stroke="#64748b" strokeWidth="1" />
+          </g>
+
+          {/* ── Carrocería principal ── */}
+          <path
+            d="M38 30 Q20 30 14 50 L10 100 L14 150 Q20 170 38 170 L382 170 Q400 170 406 150 L410 100 L406 50 Q400 30 382 30 Z"
+            fill="url(#bodyGrad)"
+            stroke="#475569"
+            strokeWidth="2"
+            filter="url(#shadow)"
+          />
+
+          {/* ── Capó (frente, izquierda) ── */}
+          <path
+            d="M38 30 Q20 30 14 50 L10 100 L14 150 Q20 170 38 170 L100 170 L100 30 Z"
+            fill="url(#hoodGrad)"
+            stroke="#475569"
+            strokeWidth="1.5"
+          />
+          {/* Línea de pliegue del capó */}
+          <line x1="55" y1="38" x2="55" y2="162" stroke="#64748b" strokeWidth="1" opacity="0.4" />
+          <line x1="75" y1="34" x2="75" y2="166" stroke="#64748b" strokeWidth="0.8" opacity="0.3" />
+
+          {/* ── Parabrisas delantero ── */}
+          <path
+            d="M100 38 L100 162 L130 155 L130 45 Z"
+            fill="#1e3a5f"
+            stroke="#334155"
+            strokeWidth="1.5"
+            opacity="0.85"
+          />
+          {/* Reflejo parabrisas */}
+          <path d="M104 50 L104 90 L112 88 L112 52 Z" fill="white" opacity="0.06" />
+
+          {/* ── Techo / cabina ── */}
+          <rect x="130" y="30" width="160" height="140" rx="4" fill="url(#roofGrad)" stroke="#334155" strokeWidth="1" />
+          {/* Línea central del techo */}
+          <line x1="130" y1="100" x2="290" y2="100" stroke="#475569" strokeWidth="1" strokeDasharray="6,4" opacity="0.4" />
+
+          {/* ── Vidrio trasero ── */}
+          <path
+            d="M290 45 L290 155 L320 162 L320 38 Z"
+            fill="#1e3a5f"
+            stroke="#334155"
+            strokeWidth="1.5"
+            opacity="0.85"
+          />
+          {/* Reflejo vidrio trasero */}
+          <path d="M294 55 L294 90 L302 88 L302 57 Z" fill="white" opacity="0.05" />
+
+          {/* ── Maletero (atrás, derecha) ── */}
+          <path
+            d="M320 30 L382 30 Q400 30 406 50 L410 100 L406 150 Q400 170 382 170 L320 170 Z"
+            fill="url(#trunkGrad)"
+            stroke="#475569"
+            strokeWidth="1.5"
+          />
+          {/* Línea de pliegue del maletero */}
+          <line x1="365" y1="38" x2="365" y2="162" stroke="#64748b" strokeWidth="1" opacity="0.4" />
+          <line x1="345" y1="34" x2="345" y2="166" stroke="#64748b" strokeWidth="0.8" opacity="0.3" />
+
+          {/* ── Faros delanteros (izquierda) ── */}
+          {/* Faro superior */}
+          <path d="M10 42 Q8 50 10 62 L22 58 L22 46 Z" fill="#fbbf24" opacity="0.9" />
+          <path d="M10 42 Q8 50 10 62 L22 58 L22 46 Z" fill="none" stroke="#f59e0b" strokeWidth="1" />
+          {/* Faro inferior */}
+          <path d="M10 138 Q8 150 10 158 L22 154 L22 142 Z" fill="#fbbf24" opacity="0.9" />
+          <path d="M10 138 Q8 150 10 158 L22 154 L22 142 Z" fill="none" stroke="#f59e0b" strokeWidth="1" />
+          {/* Luz de posición delantera */}
+          <rect x="10" y="68" width="12" height="64" rx="3" fill="#fef3c7" opacity="0.3" />
+
+          {/* ── Faros traseros (derecha) ── */}
+          {/* Faro superior */}
+          <path d="M410 42 Q412 50 410 62 L398 58 L398 46 Z" fill="#ef4444" opacity="0.9" />
+          <path d="M410 42 Q412 50 410 62 L398 58 L398 46 Z" fill="none" stroke="#dc2626" strokeWidth="1" />
+          {/* Faro inferior */}
+          <path d="M410 138 Q412 150 410 158 L398 154 L398 142 Z" fill="#ef4444" opacity="0.9" />
+          <path d="M410 138 Q412 150 410 158 L398 154 L398 142 Z" fill="none" stroke="#dc2626" strokeWidth="1" />
+          {/* Luz de posición trasera */}
+          <rect x="398" y="68" width="12" height="64" rx="3" fill="#fecaca" opacity="0.3" />
+
+          {/* ── Espejos retrovisores ── */}
+          {/* Espejo superior */}
+          <path d="M108 30 L108 22 Q118 18 128 22 L128 30 Z" fill="#334155" stroke="#475569" strokeWidth="1" />
+          {/* Espejo inferior */}
+          <path d="M108 170 L108 178 Q118 182 128 178 L128 170 Z" fill="#334155" stroke="#475569" strokeWidth="1" />
+
+          {/* ── Líneas de puertas ── */}
+          {/* Puerta delantera superior */}
+          <path d="M130 32 L210 32" stroke="#64748b" strokeWidth="1" opacity="0.5" />
+          <path d="M130 168 L210 168" stroke="#64748b" strokeWidth="1" opacity="0.5" />
+          {/* Puerta trasera superior */}
+          <path d="M210 32 L290 32" stroke="#64748b" strokeWidth="1" opacity="0.5" />
+          <path d="M210 168 L290 168" stroke="#64748b" strokeWidth="1" opacity="0.5" />
+          {/* Separador entre puertas */}
+          <line x1="210" y1="30" x2="210" y2="170" stroke="#64748b" strokeWidth="1.5" opacity="0.5" />
+
+          {/* ── Manijas de puertas ── */}
+          {/* Manija puerta delantera superior */}
+          <rect x="162" y="34" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          {/* Manija puerta delantera inferior */}
+          <rect x="162" y="161" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          {/* Manija puerta trasera superior */}
+          <rect x="240" y="34" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          {/* Manija puerta trasera inferior */}
+          <rect x="240" y="161" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+
+          {/* ── Detalle: antena ── */}
+          <line x1="260" y1="30" x2="260" y2="18" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+          <circle cx="260" cy="17" r="2" fill="#64748b" opacity="0.6" />
+
+          {/* ── Etiqueta frente/atrás ── */}
+          <text x="18" y="12" fontSize="8" fill="#64748b" fontFamily="monospace" opacity="0.7">◄ FRENTE</text>
+          <text x="360" y="12" fontSize="8" fill="#64748b" fontFamily="monospace" opacity="0.7">ATRÁS ►</text>
         </svg>
 
-        {/* Asientos superpuestos sobre el auto */}
-        <div className="relative" style={{ height: 160 }}>
+        {/* ── Asientos superpuestos sobre la cabina ── */}
+        {/* La cabina ocupa x:130–290, y:30–170 en el SVG (160×140px) */}
+        {/* Fila delantera: x≈138, Fila trasera: x≈218 */}
 
-          {/* Fila delantera: Conductor (fijo) + Copiloto (asiento 1) */}
-          <div className="absolute flex items-center gap-2" style={{ top: 30, left: 30 }}>
-            {/* Conductor — no clickeable */}
-            <div className="flex flex-col items-center gap-1">
-              <div className="w-11 h-11 rounded-lg border-2 border-slate-500/60 flex flex-col items-center justify-center"
-                style={{ background: "rgba(100,116,139,0.25)" }}>
-                <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
-                  <circle cx="16" cy="16" r="13" stroke="#64748b" strokeWidth="2.5" fill="none" />
-                  <circle cx="16" cy="16" r="4" fill="#64748b" />
-                  <line x1="16" y1="3" x2="16" y2="12" stroke="#64748b" strokeWidth="2" />
-                  <line x1="16" y1="20" x2="16" y2="29" stroke="#64748b" strokeWidth="2" />
-                  <line x1="3" y1="16" x2="12" y2="16" stroke="#64748b" strokeWidth="2" />
-                  <line x1="20" y1="16" x2="29" y2="16" stroke="#64748b" strokeWidth="2" />
-                </svg>
-              </div>
-              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide">Chofer</span>
-            </div>
-
-            {/* Copiloto — asiento 1 */}
-            <div className="flex flex-col items-center gap-1">
-              {renderSeat(copilot, "copilot")}
-              <span className="text-[8px] font-bold" style={{ color: SEAT_COLORS.copilot }}>Copiloto</span>
-            </div>
+        {/* Fila delantera (izquierda de la cabina): Copiloto arriba + Chofer abajo */}
+        <div className="absolute" style={{ left: 138, top: 38 }}>
+          {/* Copiloto (arriba = lado pasajero) */}
+          <div className="flex flex-col items-center gap-1 mb-2">
+            {renderSeat(copilot, "copilot")}
+            <span className="text-[8px] font-bold" style={{ color: SEAT_COLORS.copilot }}>Copiloto</span>
           </div>
-
-          {/* Fila trasera: 3 asientos */}
-          <div className="absolute flex items-center gap-2" style={{ top: 30, left: 138 }}>
-            {backSeats.map((s, i) => (
-              <div key={s.id} className="flex flex-col items-center gap-1">
-                {renderSeat(s, `back${i}`)}
-                <span className="text-[8px] text-slate-500 font-medium">
-                  {i === 0 ? "Izq" : i === 1 ? "Cen" : "Der"}
-                </span>
-              </div>
-            ))}
+          {/* Chofer (abajo = lado conductor, volante a la izquierda) */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-11 h-11 rounded-lg border-2 border-slate-500/60 flex flex-col items-center justify-center"
+              style={{ background: "rgba(100,116,139,0.25)" }}>
+              <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="13" stroke="#64748b" strokeWidth="2.5" fill="none" />
+                <circle cx="16" cy="16" r="4" fill="#64748b" />
+                <line x1="16" y1="3" x2="16" y2="12" stroke="#64748b" strokeWidth="2" />
+                <line x1="16" y1="20" x2="16" y2="29" stroke="#64748b" strokeWidth="2" />
+                <line x1="3" y1="16" x2="12" y2="16" stroke="#64748b" strokeWidth="2" />
+                <line x1="20" y1="16" x2="29" y2="16" stroke="#64748b" strokeWidth="2" />
+              </svg>
+            </div>
+            <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide">Chofer</span>
           </div>
+        </div>
+
+        {/* Fila trasera (derecha de la cabina): 3 asientos en columna */}
+        <div className="absolute" style={{ left: 218, top: 38 }}>
+          {backSeats.map((s, i) => (
+            <div key={s.id} className="flex flex-col items-center gap-1 mb-1">
+              {renderSeat(s, `back${i}`)}
+              <span className="text-[8px] text-slate-500 font-medium">
+                {i === 0 ? "Izq" : i === 1 ? "Cen" : "Der"}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
 
