@@ -104,10 +104,10 @@ function buildAuto(): SeatTemplate {
   return {
     vehicleType: "AUTO", floors: 1, totalSeats: 4,
     seats: [
-      { id: "S1", row: 1, col: 1, floor: 1, label: "1", type: "copilot", active: true },
+      { id: "S1", row: 1, col: 2, floor: 1, label: "1", type: "copilot", active: true },
       { id: "S2", row: 2, col: 1, floor: 1, label: "2", type: "window", active: true },
-      { id: "S3", row: 2, col: 2, floor: 1, label: "3", type: "window", active: true },
-      { id: "S4", row: 3, col: 1, floor: 1, label: "4", type: "middle", active: true },
+      { id: "S3", row: 2, col: 2, floor: 1, label: "3", type: "middle", active: true },
+      { id: "S4", row: 2, col: 3, floor: 1, label: "4", type: "window", active: true },
     ],
   };
 }
@@ -239,6 +239,139 @@ const SeatCell = memo(function SeatCell({
   );
 });
 
+// ─── AutoMap — Layout realista de sedan 4 asientos ───────────────────────────
+function AutoMap({
+  seats, editingId, onToggle, onStartEdit, onLabelChange, onFinishEdit,
+}: {
+  seats: SeatDef[];
+  editingId: string | null;
+  onToggle: (id: string) => void;
+  onStartEdit: (id: string) => void;
+  onLabelChange: (id: string, val: string) => void;
+  onFinishEdit: () => void;
+}) {
+  const copilot = seats.find(s => s.type === "copilot");
+  const backSeats = seats.filter(s => s.row === 2).sort((a, b) => a.col - b.col);
+
+  function renderSeat(seat: SeatDef | undefined, key: string) {
+    if (!seat) return <div key={key} style={{ width: 44, height: 44 }} className="flex-shrink-0" />;
+    return (
+      <SeatCell
+        key={seat.id}
+        seat={seat}
+        editingId={editingId}
+        onToggle={onToggle}
+        onStartEdit={onStartEdit}
+        onLabelChange={onLabelChange}
+        onFinishEdit={onFinishEdit}
+      />
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-3 select-none">
+      {/* Carrocería del auto */}
+      <div className="relative" style={{ width: 260 }}>
+
+        {/* SVG silueta del auto sedan */}
+        <svg viewBox="0 0 260 160" width="260" height="160" className="absolute inset-0 pointer-events-none">
+          {/* Cuerpo principal */}
+          <rect x="10" y="70" width="240" height="70" rx="18" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+          {/* Techo / cabina */}
+          <path d="M55 70 Q70 28 100 22 L160 22 Q190 28 205 70 Z" fill="#1e293b" stroke="#475569" strokeWidth="2" />
+          {/* Parabrisas delantero */}
+          <path d="M60 68 Q72 36 100 28 L160 28 Q188 36 200 68 Z" fill="#0f172a" stroke="#334155" strokeWidth="1.5" opacity="0.8" />
+          {/* Ventana trasera izq */}
+          <path d="M62 68 Q68 44 90 32 L100 28 Q72 36 60 68 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1" opacity="0.6" />
+          {/* Ventana trasera der */}
+          <path d="M198 68 Q192 44 170 32 L160 28 Q188 36 200 68 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1" opacity="0.6" />
+          {/* Rueda delantera */}
+          <circle cx="68" cy="140" r="18" fill="#0f172a" stroke="#475569" strokeWidth="3" />
+          <circle cx="68" cy="140" r="8" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+          <line x1="68" y1="122" x2="68" y2="132" stroke="#475569" strokeWidth="1.5" />
+          <line x1="68" y1="148" x2="68" y2="158" stroke="#475569" strokeWidth="1.5" />
+          <line x1="50" y1="140" x2="60" y2="140" stroke="#475569" strokeWidth="1.5" />
+          <line x1="76" y1="140" x2="86" y2="140" stroke="#475569" strokeWidth="1.5" />
+          {/* Rueda trasera */}
+          <circle cx="192" cy="140" r="18" fill="#0f172a" stroke="#475569" strokeWidth="3" />
+          <circle cx="192" cy="140" r="8" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+          <line x1="192" y1="122" x2="192" y2="132" stroke="#475569" strokeWidth="1.5" />
+          <line x1="192" y1="148" x2="192" y2="158" stroke="#475569" strokeWidth="1.5" />
+          <line x1="174" y1="140" x2="184" y2="140" stroke="#475569" strokeWidth="1.5" />
+          <line x1="200" y1="140" x2="210" y2="140" stroke="#475569" strokeWidth="1.5" />
+          {/* Faro delantero */}
+          <ellipse cx="22" cy="95" rx="8" ry="5" fill="#fbbf24" opacity="0.7" />
+          {/* Faro trasero */}
+          <ellipse cx="238" cy="95" rx="8" ry="5" fill="#ef4444" opacity="0.7" />
+          {/* Línea separadora de puertas */}
+          <line x1="130" y1="70" x2="130" y2="118" stroke="#475569" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.5" />
+          {/* Manija puerta delantera */}
+          <rect x="95" y="95" width="14" height="4" rx="2" fill="#475569" opacity="0.7" />
+          {/* Manija puerta trasera */}
+          <rect x="151" y="95" width="14" height="4" rx="2" fill="#475569" opacity="0.7" />
+        </svg>
+
+        {/* Asientos superpuestos sobre el auto */}
+        <div className="relative" style={{ height: 160 }}>
+
+          {/* Fila delantera: Conductor (fijo) + Copiloto (asiento 1) */}
+          <div className="absolute flex items-center gap-2" style={{ top: 30, left: 30 }}>
+            {/* Conductor — no clickeable */}
+            <div className="flex flex-col items-center gap-1">
+              <div className="w-11 h-11 rounded-lg border-2 border-slate-500/60 flex flex-col items-center justify-center"
+                style={{ background: "rgba(100,116,139,0.25)" }}>
+                <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="13" stroke="#64748b" strokeWidth="2.5" fill="none" />
+                  <circle cx="16" cy="16" r="4" fill="#64748b" />
+                  <line x1="16" y1="3" x2="16" y2="12" stroke="#64748b" strokeWidth="2" />
+                  <line x1="16" y1="20" x2="16" y2="29" stroke="#64748b" strokeWidth="2" />
+                  <line x1="3" y1="16" x2="12" y2="16" stroke="#64748b" strokeWidth="2" />
+                  <line x1="20" y1="16" x2="29" y2="16" stroke="#64748b" strokeWidth="2" />
+                </svg>
+              </div>
+              <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide">Chofer</span>
+            </div>
+
+            {/* Copiloto — asiento 1 */}
+            <div className="flex flex-col items-center gap-1">
+              {renderSeat(copilot, "copilot")}
+              <span className="text-[8px] font-bold" style={{ color: SEAT_COLORS.copilot }}>Copiloto</span>
+            </div>
+          </div>
+
+          {/* Fila trasera: 3 asientos */}
+          <div className="absolute flex items-center gap-2" style={{ top: 30, left: 138 }}>
+            {backSeats.map((s, i) => (
+              <div key={s.id} className="flex flex-col items-center gap-1">
+                {renderSeat(s, `back${i}`)}
+                <span className="text-[8px] text-slate-500 font-medium">
+                  {i === 0 ? "Izq" : i === 1 ? "Cen" : "Der"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Leyenda de colores */}
+      <div className="flex gap-4 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded border inline-block" style={{ background: `${SEAT_COLORS.copilot}30`, borderColor: SEAT_COLORS.copilot }} />
+          Copiloto
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded border inline-block" style={{ background: `${SEAT_COLORS.window}30`, borderColor: SEAT_COLORS.window }} />
+          Ventana
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded border inline-block" style={{ background: `${SEAT_COLORS.middle}30`, borderColor: SEAT_COLORS.middle }} />
+          Central
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── BusMap — replica exacta del layout de SeatMapModal ──────────────────────
 function BusMap({
   seats, floor, vehicleType, editingId, onToggle, onStartEdit, onLabelChange, onFinishEdit,
@@ -254,6 +387,20 @@ function BusMap({
 }) {
   const floorSeats = seats.filter(s => s.floor === floor);
   if (floorSeats.length === 0) return null;
+
+  // ── AUTO: usar layout realista de sedan ───────────────────────────────────
+  if (vehicleType === "AUTO") {
+    return (
+      <AutoMap
+        seats={seats}
+        editingId={editingId}
+        onToggle={onToggle}
+        onStartEdit={onStartEdit}
+        onLabelChange={onLabelChange}
+        onFinishEdit={onFinishEdit}
+      />
+    );
+  }
 
   const isTwoDeck = vehicleType === "BUS_2P";
 
