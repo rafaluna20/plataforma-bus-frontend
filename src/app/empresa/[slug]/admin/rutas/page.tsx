@@ -42,7 +42,7 @@ const PERU_CITIES: Record<string, { lat: number; lng: number }> = {
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-type Station = { id: string; name: string; city: string; address?: string };
+type Station = { id: string; name: string; city: string; address?: string; latitude?: number; longitude?: number };
 type Waypoint = {
   id?: string;
   stationId: string;
@@ -102,10 +102,15 @@ export default function EmpresaAdminRutasPage() {
   const [stationSearch, setStationSearch] = useState("");
   const [filteredStations, setFilteredStations] = useState<Station[]>([]);
 
-  // Nueva estación
+  // Nueva / editar estación
   const [showStationForm, setShowStationForm] = useState(false);
+  const [editingStationId, setEditingStationId] = useState<string | null>(null);
   const [stationForm, setStationForm] = useState({ name: "", city: "", address: "", latitude: "", longitude: "" });
   const [stationSaving, setStationSaving] = useState(false);
+  const [deleteStationConfirm, setDeleteStationConfirm] = useState<string | null>(null);
+  const [deletingStation, setDeletingStation] = useState(false);
+  // Panel de gestión de estaciones
+  const [showStationsPanel, setShowStationsPanel] = useState(false);
 
   // Mapa de ubicación de estación
   const [mapMarker, setMapMarker] = useState({ lat: -12.0464, lng: -77.0428 });
@@ -424,6 +429,89 @@ export default function EmpresaAdminRutasPage() {
     const h = Math.floor(totalMins / 60);
     const m = totalMins % 60;
     return h > 0 ? `${h}h ${m > 0 ? m + "m" : ""}` : `${m}m`;
+  }
+
+  // ── Funciones para editar/eliminar estaciones ────────────────────────────
+  function openEditStation(station: Station) {
+    setEditingStationId(station.id);
+    setStationForm({
+      name: station.name,
+      city: station.city,
+      address: station.address || "",
+      latitude: station.latitude?.toString() || "",
+      longitude: station.longitude?.toString() || "",
+    });
+    const lat = station.latitude || -12.0464;
+    const lng = station.longitude || -77.0428;
+    setMapMarker({ lat, lng });
+    setFlyToCoords({ lat, lng });
+    setShowStationsPanel(true);
+    setShowStationForm(true);
+  }
+
+  async function saveStation() {
+    if (!stationForm.name.trim() || !stationForm.city.trim()) {
+      showToast("Nombre y ciudad son obligatorios", "error");
+      return;
+    }
+    setStationSaving(true);
+    try {
+      if (editingStationId) {
+        const res = await authFetch(`${API}/api/v1/routes/stations/${editingStationId}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            name: stationForm.name.trim(),
+            city: stationForm.city.trim(),
+            address: stationForm.address.trim(),
+            latitude: stationForm.latitude ? parseFloat(stationForm.latitude) : undefined,
+            longitude: stationForm.longitude ? parseFloat(stationForm.longitude) : undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al actualizar estación");
+        setStations(s => s.map(st => st.id === editingStationId ? { ...st, ...data.station } : st));
+        showToast(`✅ Estación "${data.station.name}" actualizada`, "success");
+      } else {
+        const res = await authFetch(`${API}/api/v1/routes/stations`, {
+          method: "POST",
+          body: JSON.stringify({
+            companyId,
+            name: stationForm.name.trim(),
+            city: stationForm.city.trim(),
+            address: stationForm.address.trim(),
+            latitude: parseFloat(stationForm.latitude),
+            longitude: parseFloat(stationForm.longitude),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al crear estación");
+        setStations(s => [...s, data.station]);
+        showToast(`✅ Estación "${data.station.name}" creada`, "success");
+      }
+      setShowStationForm(false);
+      setEditingStationId(null);
+      setStationForm({ name: "", city: "", address: "", latitude: "", longitude: "" });
+    } catch (e: any) {
+      showToast(e.message, "error");
+    } finally {
+      setStationSaving(false);
+    }
+  }
+
+  async function deleteStation(id: string) {
+    setDeletingStation(true);
+    try {
+      const res = await authFetch(`${API}/api/v1/routes/stations/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al eliminar estación");
+      setStations(s => s.filter(st => st.id !== id));
+      setDeleteStationConfirm(null);
+      showToast("✅ Estación eliminada", "success");
+    } catch (e: any) {
+      showToast(e.message, "error");
+    } finally {
+      setDeletingStation(false);
+    }
   }
 
   // Rutas filtradas por búsqueda
@@ -871,6 +959,169 @@ export default function EmpresaAdminRutasPage() {
           )}
         </div>
       )}
+
+      {/* ─── Panel de Gestión de Estaciones ────────────────────────────────── */}
+      <div className="bg-slate-900/60 border border-white/8 rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setShowStationsPanel(v => !v)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/3 transition-colors">
+          <div className="flex items-center gap-3">
+            <MapPin className="w-5 h-5 text-indigo-400" />
+            <div className="text-left">
+              <p className="font-semibold text-white text-sm">Gestión de Estaciones / Paraderos</p>
+              <p className="text-xs text-slate-500">{stations.length} estaciones registradas — haz clic para editar o eliminar</p>
+            </div>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${showStationsPanel ? "rotate-180" : ""}`} />
+        </button>
+
+        {showStationsPanel && (
+          <div className="border-t border-white/5 p-5 space-y-4">
+            {/* Formulario editar/crear estación desde el panel */}
+            {showStationForm && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-800/70 rounded-xl border border-indigo-500/20">
+                <div className="space-y-3">
+                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                    {editingStationId ? <><Pencil className="w-4 h-4 text-indigo-400" /> Editar Estación</> : <><Plus className="w-4 h-4 text-indigo-400" /> Nueva Estación</>}
+                  </p>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Nombre *</label>
+                    <input value={stationForm.name} onChange={e => setStationForm(f => ({ ...f, name: e.target.value }))} placeholder="Ej: Terminal Yerbateros" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Ciudad *</label>
+                      <input value={stationForm.city} onChange={e => handleCityInput(e.target.value)} placeholder="Ej: Lima" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Dirección</label>
+                      <input value={stationForm.address} onChange={e => setStationForm(f => ({ ...f, address: e.target.value }))} placeholder="Av. Principal 123" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Latitud</label>
+                      <input value={stationForm.latitude} onChange={e => handleLatLonInput("latitude", e.target.value)} placeholder="-12.0464" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Longitud</label>
+                      <input value={stationForm.longitude} onChange={e => handleLatLonInput("longitude", e.target.value)} placeholder="-77.0428" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-1">
+                    <button type="button" onClick={() => { setShowStationForm(false); setEditingStationId(null); setStationForm({ name: "", city: "", address: "", latitude: "", longitude: "" }); }}
+                      className="text-sm text-slate-400 hover:text-white px-3 py-1.5 rounded-lg border border-white/10">Cancelar</button>
+                    <button type="button" onClick={saveStation} disabled={stationSaving}
+                      className="text-sm bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg font-medium disabled:opacity-50 flex items-center gap-1.5">
+                      {stationSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Guardando...</> : editingStationId ? "Guardar Cambios" : "Crear Estación"}
+                    </button>
+                  </div>
+                </div>
+                <div className="h-64 rounded-xl overflow-hidden border border-slate-700 relative">
+                  <LocationPicker marker={mapMarker} setMarker={handleMapMarkerChange} flyTo={flyToCoords} />
+                  <div className="absolute bottom-2 left-2 bg-slate-900/90 border border-white/10 px-2 py-1 rounded text-[10px] text-slate-300 pointer-events-none z-[400]">
+                    📍 Arrastra el marcador
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal confirmar eliminar estación */}
+            {deleteStationConfirm && (() => {
+              const st = stations.find(s => s.id === deleteStationConfirm);
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+                  <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-red-500/10 rounded-xl"><Trash2 className="w-6 h-6 text-red-400" /></div>
+                      <div>
+                        <h3 className="font-bold text-white">Eliminar estación</h3>
+                        <p className="text-slate-400 text-sm">Esta acción no se puede deshacer</p>
+                      </div>
+                    </div>
+                    <p className="text-slate-300 text-sm">
+                      ¿Eliminar la estación <span className="font-bold text-white">"{st?.name}"</span> en {st?.city}?
+                    </p>
+                    <div className="p-3 bg-amber-500/8 border border-amber-500/20 rounded-lg">
+                      <p className="text-amber-400 text-xs flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        Si la estación está en uso en alguna ruta, no podrá eliminarse.
+                      </p>
+                    </div>
+                    <div className="flex gap-3">
+                      <button onClick={() => setDeleteStationConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm">Cancelar</button>
+                      <button onClick={() => deleteStation(deleteStationConfirm)} disabled={deletingStation}
+                        className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                        style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}>
+                        {deletingStation ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Barra de búsqueda + botón nueva estación */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-500" />
+                <input value={stationSearch} onChange={e => setStationSearch(e.target.value)} placeholder="Buscar estación..."
+                  className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none" />
+              </div>
+              <select value={cityFilter} onChange={e => setCityFilter(e.target.value)}
+                className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm">
+                <option value="">Todas las ciudades</option>
+                {allCities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button
+                onClick={() => { setEditingStationId(null); setStationForm({ name: "", city: "", address: "", latitude: "", longitude: "" }); setShowStationForm(true); }}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 transition-colors whitespace-nowrap">
+                <Plus className="w-4 h-4" /> Nueva
+              </button>
+            </div>
+
+            {/* Tabla de estaciones */}
+            <div className="overflow-x-auto rounded-xl border border-white/5">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/5 bg-slate-800/50">
+                    <th className="text-left px-4 py-3 text-xs text-slate-400 font-medium">Nombre</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-400 font-medium">Ciudad</th>
+                    <th className="text-left px-4 py-3 text-xs text-slate-400 font-medium hidden md:table-cell">Dirección</th>
+                    <th className="text-right px-4 py-3 text-xs text-slate-400 font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStations.length === 0 ? (
+                    <tr><td colSpan={4} className="text-center py-8 text-slate-500 text-sm">No se encontraron estaciones</td></tr>
+                  ) : filteredStations.map(s => (
+                    <tr key={s.id} className="border-b border-white/3 hover:bg-white/3 transition-colors">
+                      <td className="px-4 py-3 text-white font-medium">{s.name}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300">{s.city}</span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-400 text-xs hidden md:table-cell">{s.address || "—"}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openEditStation(s)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-indigo-500/15 border border-transparent hover:border-indigo-500/30 transition-all">
+                            <Pencil className="w-3.5 h-3.5" /> Editar
+                          </button>
+                          <button onClick={() => setDeleteStationConfirm(s.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-slate-500 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-all">
+                            <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ─── Lista de rutas ─────────────────────────────────────────────────── */}
       {loading ? (
