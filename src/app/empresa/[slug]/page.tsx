@@ -19,6 +19,7 @@ const AdminVenta = dynamic(() => import("./admin/venta/page"), { ssr: false });
 const AdminViajes = dynamic(() => import("./admin/viajes/page"), { ssr: false });
 const AdminRutas = dynamic(() => import("./admin/rutas/page"), { ssr: false });
 const AdminVehiculos = dynamic(() => import("./admin/vehiculos/page"), { ssr: false });
+const AdminConductores = dynamic(() => import("./admin/conductores/page"), { ssr: false });
 const AdminVendedores = dynamic(() => import("./admin/vendedores/page"), { ssr: false });
 const AdminPerfil = dynamic(() => import("./admin/perfil/page"), { ssr: false });
 const MapaInteractivo = dynamic(() => import("@/components/map/MapaInteractivo"), { ssr: false,
@@ -76,7 +77,7 @@ const tripStatusConfig: Record<string, { label: string; color: string; bg: strin
   CANCELLED:  { label: "Cancelado",  color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
 };
 
-type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "mapa" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-vendedores" | "admin-perfil";
+type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "mapa" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-conductores" | "admin-vendedores" | "admin-perfil";
 
 // ─── COUNTDOWN BADGE COMPONENT ────────────────────────────────────────────────
 function CountdownBadge({ departureTime, isPast }: { departureTime: string; isPast: boolean }) {
@@ -759,7 +760,8 @@ export default function EmpresaPublicaPage() {
                     { id: "admin-viajes", label: "Mis Viajes", emoji: "🚌", roles: ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"] },
                     { id: "admin-rutas", label: "Gestión de Rutas", emoji: "🗺️", roles: ["ADMIN", "SUPER_ADMIN"] },
                     { id: "admin-vehiculos", label: "Flota de Vehículos", emoji: "🚐", roles: ["ADMIN", "SUPER_ADMIN"] },
-                    { id: "admin-vendedores", label: "Personal", emoji: "👥", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-conductores", label: "Conductores", emoji: "🚐", roles: ["ADMIN", "SUPER_ADMIN"] },
+                    { id: "admin-vendedores", label: "Vendedores", emoji: "👥", roles: ["ADMIN", "SUPER_ADMIN"] },
                     { id: "admin-perfil", label: "Perfil de Empresa", emoji: "🏢", roles: ["ADMIN", "SUPER_ADMIN"] },
                   ]
                   .filter(item => item.roles.includes(currentUser.role))
@@ -1637,6 +1639,7 @@ export default function EmpresaPublicaPage() {
           {isCompanyStaff && activeSection === "admin-viajes" && <AdminViajes />}
           {isCompanyStaff && activeSection === "admin-rutas" && <AdminRutas />}
           {isCompanyStaff && activeSection === "admin-vehiculos" && <AdminVehiculos />}
+          {isCompanyStaff && activeSection === "admin-conductores" && <AdminConductores />}
           {isCompanyStaff && activeSection === "admin-vendedores" && <AdminVendedores />}
           {isCompanyStaff && activeSection === "admin-perfil" && <AdminPerfil />}
 
