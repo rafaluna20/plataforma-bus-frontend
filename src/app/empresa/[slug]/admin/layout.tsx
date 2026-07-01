@@ -5,8 +5,8 @@ import { useParams, useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   Bus, Ticket, BarChart3, Settings, LogOut,
-  Menu, X, ChevronRight, RefreshCw, Home,
-  Map, Building2
+  Menu, X, ChevronRight, Home,
+  Map, Building2, Truck, Users
 } from "lucide-react";
 import { getCurrentUser, logout, authFetch } from "@/lib/auth";
 
@@ -125,6 +125,18 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
       href: `/empresa/${slugStr}/admin/vehiculos`,
       label: "Flota de Vehículos",
       icon: <Bus className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/conductores`,
+      label: "Conductores",
+      icon: <Truck className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/vendedores`,
+      label: "Vendedores",
+      icon: <Users className="w-5 h-5" />,
       exact: false,
     },
     {

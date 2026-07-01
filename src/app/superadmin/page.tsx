@@ -14,7 +14,7 @@ const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type UserRole = "SUPER_ADMIN" | "ADMIN" | "DRIVER" | "PASSENGER";
+type UserRole = "SUPER_ADMIN" | "ADMIN" | "DRIVER" | "PASSENGER" | "AGENCY_SELLER";
 
 type UserItem = {
   id: string;
@@ -37,14 +37,13 @@ type Company = {
 
 type Stats = {
   totalUsers: number;
-  // El backend devuelve byRole: { ADMIN, SUPER_ADMIN, PASSENGER, DRIVER }
   byRole?: {
     ADMIN?: number;
     SUPER_ADMIN?: number;
     DRIVER?: number;
     PASSENGER?: number;
+    AGENCY_SELLER?: number;
   };
-  // Campos alternativos (por si el backend cambia)
   totalAdmins?: number;
   totalDrivers?: number;
   totalPassengers?: number;
@@ -55,10 +54,11 @@ type Stats = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const ROLE_CONFIG: Record<UserRole, { label: string; color: string; icon: React.ReactNode }> = {
-  SUPER_ADMIN: { label: "Super Admin", color: "text-purple-400 bg-purple-500/10 border-purple-500/30", icon: <Crown className="w-3 h-3" /> },
-  ADMIN:       { label: "Admin",       color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", icon: <Shield className="w-3 h-3" /> },
-  DRIVER:      { label: "Conductor",   color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",       icon: <Truck className="w-3 h-3" /> },
-  PASSENGER:   { label: "Pasajero",    color: "text-slate-400 bg-slate-500/10 border-slate-500/30",    icon: <User className="w-3 h-3" /> },
+  SUPER_ADMIN:   { label: "Super Admin", color: "text-purple-400 bg-purple-500/10 border-purple-500/30", icon: <Crown className="w-3 h-3" /> },
+  ADMIN:         { label: "Admin",       color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30", icon: <Shield className="w-3 h-3" /> },
+  DRIVER:        { label: "Conductor",   color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",       icon: <Truck className="w-3 h-3" /> },
+  PASSENGER:     { label: "Pasajero",    color: "text-slate-400 bg-slate-500/10 border-slate-500/30",    icon: <User className="w-3 h-3" /> },
+  AGENCY_SELLER: { label: "Vendedor",    color: "text-amber-400 bg-amber-500/10 border-amber-500/30",    icon: <UserCheck className="w-3 h-3" /> },
 };
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -69,9 +69,10 @@ export default function SuperAdminPanel() {
 
   const [users, setUsers] = useState<UserItem[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [stations, setStations] = useState<{ id: string; name: string; city: string }[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"users" | "create_admin" | "companies">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "create_admin" | "create_staff" | "companies">("users");
   const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState<string>("ALL");
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -83,6 +84,16 @@ export default function SuperAdminPanel() {
   const [showPassword, setShowPassword] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
   const [formError, setFormError] = useState("");
+
+  // ─── Formulario Crear Staff (DRIVER / SELLER) ─────────────────────────────
+  const [staffForm, setStaffForm] = useState({
+    name: "", email: "", password: "", companyId: "",
+    role: "DRIVER" as "DRIVER" | "AGENCY_SELLER",
+    docType: "DNI", docNum: "", phone: "", stationId: "",
+  });
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [staffSaving, setStaffSaving] = useState(false);
+  const [staffError, setStaffError] = useState("");
 
   // ─── Formulario Cambiar Rol ───────────────────────────────────────────────
   const [changingRole, setChangingRole] = useState<string | null>(null);
@@ -107,15 +118,15 @@ export default function SuperAdminPanel() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersRes, companiesRes, statsRes] = await Promise.all([
+      const [usersRes, companiesRes, statsRes, stationsRes] = await Promise.all([
         authFetch(`${API}/api/v1/admin/users?limit=100`),
         authFetch(`${API}/api/v1/companies`),
         authFetch(`${API}/api/v1/admin/stats`),
+        authFetch(`${API}/api/v1/routes/stations`),
       ]);
 
       if (usersRes.ok) {
         const d = await usersRes.json();
-        // El backend devuelve { data: [...], total, page, totalPages }
         setUsers(d.data || d.users || []);
       }
       if (companiesRes.ok) {
@@ -125,6 +136,10 @@ export default function SuperAdminPanel() {
       if (statsRes.ok) {
         const d = await statsRes.json();
         setStats(d);
+      }
+      if (stationsRes.ok) {
+        const d = await stationsRes.json();
+        setStations(d.stations || []);
       }
     } catch (e) {
       console.error(e);
@@ -144,6 +159,48 @@ export default function SuperAdminPanel() {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  // ─── Crear Staff (DRIVER / SELLER) ────────────────────────────────────────
+  async function handleCreateStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setStaffError("");
+    if (!staffForm.name || !staffForm.email || !staffForm.password || !staffForm.companyId) {
+      setStaffError("Nombre, correo, contraseña y empresa son obligatorios"); return;
+    }
+    if (staffForm.password.length < 8) {
+      setStaffError("La contraseña debe tener al menos 8 caracteres"); return;
+    }
+    const endpoint = staffForm.role === "DRIVER" ? "driver" : "seller";
+    setStaffSaving(true);
+    try {
+      const body: any = {
+        name: staffForm.name,
+        email: staffForm.email,
+        password: staffForm.password,
+        companyId: staffForm.companyId,
+      };
+      if (staffForm.docType) body.docType = staffForm.docType;
+      if (staffForm.docNum) body.docNum = staffForm.docNum;
+      if (staffForm.phone) body.phone = staffForm.phone;
+      if (staffForm.role === "AGENCY_SELLER" && staffForm.stationId) body.stationId = staffForm.stationId;
+
+      const res = await authFetch(`${API}/api/v1/admin/users/${endpoint}`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Error al crear ${endpoint}`);
+      const roleLabel = staffForm.role === "DRIVER" ? "Conductor" : "Vendedor";
+      setStaffForm({ name: "", email: "", password: "", companyId: "", role: "DRIVER", docType: "DNI", docNum: "", phone: "", stationId: "" });
+      showToast(`✅ ${roleLabel} "${data.user.name}" creado exitosamente`, "success");
+      setActiveTab("users");
+      loadData();
+    } catch (err: any) {
+      setStaffError(err.message);
+    } finally {
+      setStaffSaving(false);
+    }
+  }
 
   // ─── Crear ADMIN ──────────────────────────────────────────────────────────
   async function handleCreateAdmin(e: React.FormEvent) {
@@ -178,7 +235,7 @@ export default function SuperAdminPanel() {
   async function handleChangeRole(userId: string) {
     try {
       const body: any = { role: newRole };
-      if (newRole === "ADMIN" || newRole === "DRIVER") {
+      if (newRole === "ADMIN" || newRole === "DRIVER" || newRole === "AGENCY_SELLER") {
         if (!newCompanyId) { showToast("Selecciona una empresa para este rol", "error"); return; }
         body.companyId = newCompanyId;
       }
@@ -264,23 +321,24 @@ export default function SuperAdminPanel() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-          <StatCard title="Total Usuarios" value={stats.totalUsers} color="text-white" />
-          <StatCard title="Admins"         value={stats.byRole?.ADMIN      ?? stats.totalAdmins      ?? 0} color="text-indigo-400" />
-          <StatCard title="Conductores"    value={stats.byRole?.DRIVER     ?? stats.totalDrivers     ?? 0} color="text-cyan-400" />
-          <StatCard title="Pasajeros"      value={stats.byRole?.PASSENGER  ?? stats.totalPassengers  ?? 0} color="text-slate-300" />
-          <StatCard title="Empresas"       value={stats.totalCompanies} color="text-emerald-400" />
+          <StatCard title="Total Usuarios"  value={stats.totalUsers} color="text-white" />
+          <StatCard title="Admins"          value={stats.byRole?.ADMIN      ?? stats.totalAdmins   ?? 0} color="text-indigo-400" />
+          <StatCard title="Conductores"     value={stats.byRole?.DRIVER     ?? stats.totalDrivers  ?? 0} color="text-cyan-400" />
+          <StatCard title="Vendedores"      value={stats.byRole?.AGENCY_SELLER ?? 0}                     color="text-amber-400" />
+          <StatCard title="Empresas"        value={stats.totalCompanies}                                  color="text-emerald-400" />
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-slate-900/60 rounded-xl border border-white/5 w-fit">
+      <div className="flex flex-wrap gap-1 p-1 bg-slate-900/60 rounded-xl border border-white/5 w-fit">
         {([
-          { key: "users", label: "👥 Usuarios" },
-          { key: "create_admin", label: "➕ Crear ADMIN" },
-          { key: "companies", label: "🏢 Empresas" },
+          { key: "users",        label: "👥 Usuarios" },
+          { key: "create_admin", label: "🛡️ Crear ADMIN" },
+          { key: "create_staff", label: "🚐 Conductor / Vendedor" },
+          { key: "companies",    label: "🏢 Empresas" },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key
               ? "bg-purple-600 text-white"
               : "text-slate-400 hover:text-white"}`}>
             {tab.label}
@@ -312,6 +370,7 @@ export default function SuperAdminPanel() {
                 <option value="SUPER_ADMIN">Super Admin</option>
                 <option value="ADMIN">Admin</option>
                 <option value="DRIVER">Conductor</option>
+                <option value="AGENCY_SELLER">Vendedor</option>
                 <option value="PASSENGER">Pasajero</option>
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -334,7 +393,7 @@ export default function SuperAdminPanel() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {filteredUsers.map(u => {
-                    const roleConf = ROLE_CONFIG[u.role];
+                    const roleConf = ROLE_CONFIG[u.role] ?? ROLE_CONFIG["PASSENGER"];
                     const isChanging = changingRole === u.id;
                     return (
                       <tr key={u.id} className="hover:bg-white/5 transition-colors">
@@ -371,9 +430,10 @@ export default function SuperAdminPanel() {
                                     className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white">
                                     <option value="ADMIN">Admin</option>
                                     <option value="DRIVER">Conductor</option>
+                                    <option value="AGENCY_SELLER">Vendedor</option>
                                     <option value="PASSENGER">Pasajero</option>
                                   </select>
-                                  {(newRole === "ADMIN" || newRole === "DRIVER") && (
+                                  {(newRole === "ADMIN" || newRole === "DRIVER" || newRole === "AGENCY_SELLER") && (
                                     <select value={newCompanyId} onChange={e => setNewCompanyId(e.target.value)}
                                       className="text-xs bg-slate-800 border border-slate-700 rounded px-2 py-1 text-white">
                                       <option value="">Empresa...</option>
@@ -407,6 +467,147 @@ export default function SuperAdminPanel() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ─── TAB: CREAR STAFF (DRIVER / SELLER) ───────────────────────────── */}
+      {activeTab === "create_staff" && (
+        <div className="glass-card p-8 max-w-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+              <Truck className="w-5 h-5 text-cyan-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">Crear Conductor o Vendedor</h2>
+              <p className="text-slate-400 text-sm">Asigna personal operativo a una empresa</p>
+            </div>
+          </div>
+
+          <form onSubmit={handleCreateStaff} className="space-y-5">
+            {/* Selector de rol */}
+            <div className="flex gap-3">
+              {(["DRIVER", "AGENCY_SELLER"] as const).map(r => (
+                <button key={r} type="button"
+                  onClick={() => setStaffForm(f => ({ ...f, role: r }))}
+                  className={`flex-1 py-3 rounded-xl border text-sm font-bold transition-all ${
+                    staffForm.role === r
+                      ? r === "DRIVER"
+                        ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300"
+                        : "bg-amber-500/20 border-amber-500/50 text-amber-300"
+                      : "border-white/10 text-slate-400 hover:border-white/20"
+                  }`}>
+                  {r === "DRIVER" ? "🚐 Conductor" : "🏪 Vendedor"}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Nombre completo *</label>
+                <input value={staffForm.name}
+                  onChange={e => setStaffForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Carlos Mendoza"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Correo electrónico *</label>
+                <input type="email" value={staffForm.email}
+                  onChange={e => setStaffForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="personal@empresa.com"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Contraseña *</label>
+                <div className="relative">
+                  <input type={showStaffPassword ? "text" : "password"} value={staffForm.password}
+                    onChange={e => setStaffForm(f => ({ ...f, password: e.target.value }))}
+                    placeholder="Mínimo 8 caracteres"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 pr-10 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+                  <button type="button" onClick={() => setShowStaffPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white">
+                    {showStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Teléfono</label>
+                <input value={staffForm.phone}
+                  onChange={e => setStaffForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="+51 999 000 111"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Tipo Doc.</label>
+                <select value={staffForm.docType}
+                  onChange={e => setStaffForm(f => ({ ...f, docType: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-500">
+                  {["DNI", "CE", "PASAPORTE", "RUC"].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">N° Documento</label>
+                <input value={staffForm.docNum}
+                  onChange={e => setStaffForm(f => ({ ...f, docNum: e.target.value }))}
+                  placeholder="12345678"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Empresa *</label>
+              <select value={staffForm.companyId}
+                onChange={e => setStaffForm(f => ({ ...f, companyId: e.target.value }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-cyan-500">
+                <option value="">Selecciona la empresa</option>
+                {companies.filter(c => c.isActive).map(c => (
+                  <option key={c.id} value={c.id}>{c.tradeName} — RUC {c.ruc}</option>
+                ))}
+              </select>
+              {companies.length === 0 && (
+                <p className="text-xs text-amber-400 mt-1 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" /> No hay empresas registradas. Crea una primero en la pestaña Empresas.
+                </p>
+              )}
+            </div>
+
+            {staffForm.role === "AGENCY_SELLER" && (
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Paradero / Punto de Venta</label>
+                <select value={staffForm.stationId}
+                  onChange={e => setStaffForm(f => ({ ...f, stationId: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500">
+                  <option value="">Sin paradero asignado (opcional)</option>
+                  {stations.map(s => (
+                    <option key={s.id} value={s.id}>{s.name} — {s.city}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {staffError && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+                <XCircle className="w-4 h-4 flex-shrink-0" />
+                {staffError}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button type="submit" disabled={staffSaving}
+                className={`flex-1 py-3 rounded-xl text-white font-bold text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                  staffForm.role === "DRIVER" ? "bg-cyan-600 hover:bg-cyan-500" : "bg-amber-600 hover:bg-amber-500"
+                }`}>
+                {staffSaving
+                  ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Creando...</>
+                  : <><Plus className="w-4 h-4" /> Crear {staffForm.role === "DRIVER" ? "Conductor" : "Vendedor"}</>
+                }
+              </button>
+              <button type="button"
+                onClick={() => setStaffForm({ name: "", email: "", password: "", companyId: "", role: "DRIVER", docType: "DNI", docNum: "", phone: "", stationId: "" })}
+                className="px-5 py-3 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
+                Limpiar
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
