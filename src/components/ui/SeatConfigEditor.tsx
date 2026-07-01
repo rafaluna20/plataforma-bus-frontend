@@ -253,23 +253,60 @@ function AutoMap({
   const copilot = seats.find(s => s.type === "copilot");
   const backSeats = seats.filter(s => s.row === 2).sort((a, b) => a.col - b.col);
 
+  // Tamaño de asientos: 80% de 44 = 35px
+  const SZ = 35;
+
   function renderSeat(seat: SeatDef | undefined, key: string) {
-    if (!seat) return <div key={key} style={{ width: 44, height: 44 }} className="flex-shrink-0" />;
+    if (!seat) return <div key={key} style={{ width: SZ, height: SZ }} className="flex-shrink-0" />;
+    const isEditing = editingId === seat.id;
+    const color = seat.active ? SEAT_COLORS[seat.type] : "#475569";
     return (
-      <SeatCell
-        key={seat.id}
-        seat={seat}
-        editingId={editingId}
-        onToggle={onToggle}
-        onStartEdit={onStartEdit}
-        onLabelChange={onLabelChange}
-        onFinishEdit={onFinishEdit}
-      />
+      <div key={seat.id} className="relative flex-shrink-0 group" style={{ width: SZ, height: SZ }}>
+        <button
+          type="button"
+          onClick={() => !isEditing && onToggle(seat.id)}
+          title={`Asiento ${seat.label} — ${seat.active ? "Activo" : "Inactivo"}`}
+          className="w-full h-full rounded-md border-2 flex items-center justify-center font-bold transition-all"
+          style={{
+            fontSize: 10,
+            background: seat.active ? `${color}30` : "rgba(71,85,105,0.15)",
+            borderColor: seat.active ? color : "#475569",
+            color: seat.active ? color : "#64748b",
+            opacity: seat.active ? 1 : 0.4,
+          }}
+        >
+          {isEditing ? (
+            <input
+              autoFocus
+              value={seat.label}
+              onChange={e => onLabelChange(seat.id, e.target.value)}
+              onBlur={onFinishEdit}
+              onKeyDown={e => e.key === "Enter" && onFinishEdit()}
+              maxLength={4}
+              className="w-full h-full bg-transparent text-center font-bold focus:outline-none"
+              style={{ fontSize: 10, color: seat.active ? color : "#64748b" }}
+              onClick={e => e.stopPropagation()}
+            />
+          ) : (
+            <span>{seat.label}</span>
+          )}
+        </button>
+        {!isEditing && seat.active && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); onStartEdit(seat.id); }}
+            className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+            title="Editar etiqueta"
+          >
+            <Pencil className="w-2 h-2 text-black" />
+          </button>
+        )}
+      </div>
     );
   }
 
-  // Dimensiones del SVG: ancho=420, alto=200 (horizontal, frente a la izquierda)
-  const W = 420, H = 200;
+  // Dimensiones del contenedor: +10% sobre el viewBox original (420×200)
+  const W = 462, H = 220;
 
   return (
     <div className="flex flex-col items-center gap-3 select-none">
@@ -278,7 +315,7 @@ function AutoMap({
 
         {/* ── SVG realista del auto en vista de planta (top-down) ── */}
         <svg
-          viewBox={`0 0 ${W} ${H}`}
+          viewBox="0 0 420 200"
           width={W}
           height={H}
           className="absolute inset-0 pointer-events-none"
@@ -481,17 +518,19 @@ function AutoMap({
         {/* Fila delantera: x≈138, Fila trasera: x≈218 */}
 
         {/* Fila delantera (izquierda de la cabina): Copiloto arriba + Chofer abajo */}
-        <div className="absolute" style={{ left: 138, top: 38 }}>
+        {/* SVG escala 420→462 (factor 1.1), cabina x:130→143px, y:30→33px */}
+        {/* Posición en contenedor: left = 130*1.1 + 8 = 151, top = 30*1.1 + 5 = 38 */}
+        <div className="absolute" style={{ left: 151, top: 38 }}>
           {/* Copiloto (arriba = lado pasajero) */}
-          <div className="flex flex-col items-center gap-1 mb-2">
+          <div className="flex flex-col items-center gap-0.5 mb-1">
             {renderSeat(copilot, "copilot")}
-            <span className="text-[8px] font-bold" style={{ color: SEAT_COLORS.copilot }}>Copiloto</span>
+            <span className="text-[7px] font-bold" style={{ color: SEAT_COLORS.copilot }}>Copiloto</span>
           </div>
           {/* Chofer (abajo = lado conductor, volante a la izquierda) */}
-          <div className="flex flex-col items-center gap-1">
-            <div className="w-11 h-11 rounded-lg border-2 border-slate-500/60 flex flex-col items-center justify-center"
-              style={{ background: "rgba(100,116,139,0.25)" }}>
-              <svg width="18" height="18" viewBox="0 0 32 32" fill="none">
+          <div className="flex flex-col items-center gap-0.5">
+            <div className="rounded-md border-2 border-slate-500/60 flex flex-col items-center justify-center"
+              style={{ width: SZ, height: SZ, background: "rgba(100,116,139,0.25)" }}>
+              <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
                 <circle cx="16" cy="16" r="13" stroke="#64748b" strokeWidth="2.5" fill="none" />
                 <circle cx="16" cy="16" r="4" fill="#64748b" />
                 <line x1="16" y1="3" x2="16" y2="12" stroke="#64748b" strokeWidth="2" />
@@ -500,16 +539,17 @@ function AutoMap({
                 <line x1="20" y1="16" x2="29" y2="16" stroke="#64748b" strokeWidth="2" />
               </svg>
             </div>
-            <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide">Chofer</span>
+            <span className="text-[7px] text-slate-500 font-bold uppercase tracking-wide">Chofer</span>
           </div>
         </div>
 
         {/* Fila trasera (derecha de la cabina): 3 asientos en columna */}
-        <div className="absolute" style={{ left: 218, top: 38 }}>
+        {/* Posición: left = 210*1.1 + 8 = 239, top = 38 */}
+        <div className="absolute" style={{ left: 239, top: 38 }}>
           {backSeats.map((s, i) => (
-            <div key={s.id} className="flex flex-col items-center gap-1 mb-1">
+            <div key={s.id} className="flex flex-col items-center gap-0.5 mb-1">
               {renderSeat(s, `back${i}`)}
-              <span className="text-[8px] text-slate-500 font-medium">
+              <span className="text-[7px] text-slate-500 font-medium">
                 {i === 0 ? "Izq" : i === 1 ? "Cen" : "Der"}
               </span>
             </div>
