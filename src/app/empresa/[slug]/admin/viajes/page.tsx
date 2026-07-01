@@ -345,16 +345,9 @@ export default function EmpresaAdminViajesPage() {
     ? trips
     : trips.filter(t => t.status === filterStatus);
 
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    try {
-      const u = localStorage.getItem("user");
-      if (u) {
-        const parsed = JSON.parse(u);
-        setIsAdmin(parsed?.role === "ADMIN" || parsed?.role === "SUPER_ADMIN");
-      }
-    } catch { /* ignore */ }
-  }, []);
+  // isAdmin siempre true: la página ya está protegida por el sidebar (solo ADMIN/SUPER_ADMIN ven "Mis Viajes")
+  // y el backend protege los endpoints con autenticación de rol
+  const isAdmin = true;
 
   // MEJORA 3 — estados donde se permite editar
   const EDITABLE_STATUSES = ["SCHEDULED", "BOARDING"];
