@@ -285,6 +285,202 @@ const PostCol = memo(function PostCol() {
   );
 });
 
+// ─── AutoSaleMap — Vista de planta del auto para venta de pasajes ─────────────
+const AutoSaleMap = memo(function AutoSaleMap({
+  occupied, selectedSeat, onSeatClick, primaryColor, editMode, seatLabels, onLabelChange, seatTemplate,
+}: {
+  occupied: string[]; selectedSeat: string;
+  onSeatClick: (id: string) => void;
+  primaryColor: string;
+  editMode: boolean;
+  seatLabels: Record<string, string>;
+  onLabelChange: (id: string, val: string) => void;
+  seatTemplate?: any;
+}) {
+  const occupiedSet = useMemo(() => new Set(occupied), [occupied]);
+  const SZ = 52; // tamaño de asientos para venta
+
+  // Extraer asientos del template
+  const templateSeats: any[] = useMemo(() => {
+    if (!seatTemplate) return [];
+    const raw = Array.isArray(seatTemplate) ? seatTemplate : (seatTemplate.seats ?? []);
+    return raw.filter((s: any) => s.active !== false);
+  }, [seatTemplate]);
+
+  // Copiloto (row=1) y traseros (row=2)
+  const copilotSeat = templateSeats.find((s: any) => s.type === "copilot" || s.row === 1);
+  const backSeats = templateSeats.filter((s: any) => s.row === 2).sort((a: any, b: any) => a.col - b.col);
+
+  // Fallback si no hay template
+  const allSeats = templateSeats.length > 0 ? templateSeats : [
+    { id: "S1", row: 1, col: 2, type: "copilot", label: "1" },
+    { id: "S2", row: 2, col: 1, type: "window", label: "2" },
+    { id: "S3", row: 2, col: 2, type: "middle", label: "3" },
+    { id: "S4", row: 2, col: 3, type: "window", label: "4" },
+  ];
+  const copilot = copilotSeat || allSeats[0];
+  const backs = backSeats.length > 0 ? backSeats : allSeats.slice(1);
+
+  function renderSeatBtn(seat: any) {
+    const id = seat.id;
+    const label = seatLabels[id] ?? seat.label ?? id.replace(/\D/g, "");
+    const isOcc = occupiedSet.has(id);
+    const isSel = selectedSeat === id;
+    return (
+      <SeatButton
+        key={id}
+        id={id}
+        label={label}
+        isOcc={isOcc}
+        isSel={isSel}
+        editMode={editMode}
+        primaryColor={primaryColor}
+        onSeatClick={onSeatClick}
+        onLabelChange={onLabelChange}
+      />
+    );
+  }
+
+  // Dimensiones del contenedor (escalado +10% del viewBox 420×200)
+  const W = 550, H = 260;
+
+  return (
+    <div className="flex flex-col items-center gap-3 select-none">
+      <div className="relative" style={{ width: W, height: H }}>
+        {/* SVG del auto en vista de planta */}
+        <svg
+          viewBox="0 0 420 200"
+          width={W}
+          height={H}
+          className="absolute inset-0 pointer-events-none"
+          style={{ overflow: "visible" }}
+        >
+          <defs>
+            <linearGradient id="bodyGradS" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="50%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#334155" />
+            </linearGradient>
+            <linearGradient id="roofGradS" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0f172a" />
+              <stop offset="50%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </linearGradient>
+            <linearGradient id="hoodGradS" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="60%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+            <linearGradient id="trunkGradS" x1="1" y1="0" x2="0" y2="0">
+              <stop offset="0%" stopColor="#1e293b" />
+              <stop offset="60%" stopColor="#334155" />
+              <stop offset="100%" stopColor="#1e293b" />
+            </linearGradient>
+            <radialGradient id="wheelGradS" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="60%" stopColor="#1e293b" />
+              <stop offset="100%" stopColor="#0f172a" />
+            </radialGradient>
+            <filter id="shadowS" x="-10%" y="-10%" width="120%" height="120%">
+              <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="#000" floodOpacity="0.5" />
+            </filter>
+          </defs>
+
+          {/* Ruedas */}
+          {[72, 348].map(cx => [14, 186].map(cy => (
+            <g key={`${cx}-${cy}`} transform={`translate(${cx}, ${cy})`}>
+              <rect x="-14" y={cy < 100 ? "-8" : "-28"} width="28" height="36" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+              <rect x="-9" y={cy < 100 ? "-3" : "-23"} width="18" height="26" rx="4" fill="url(#wheelGradS)" />
+              <circle cx="0" cy={cy < 100 ? 10 : -10} r="5" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+            </g>
+          )))}
+
+          {/* Carrocería */}
+          <path d="M38 30 Q20 30 14 50 L10 100 L14 150 Q20 170 38 170 L382 170 Q400 170 406 150 L410 100 L406 50 Q400 30 382 30 Z"
+            fill="url(#bodyGradS)" stroke="#475569" strokeWidth="2" filter="url(#shadowS)" />
+
+          {/* Capó */}
+          <path d="M38 30 Q20 30 14 50 L10 100 L14 150 Q20 170 38 170 L100 170 L100 30 Z"
+            fill="url(#hoodGradS)" stroke="#475569" strokeWidth="1.5" />
+          <line x1="55" y1="38" x2="55" y2="162" stroke="#64748b" strokeWidth="1" opacity="0.4" />
+          <line x1="75" y1="34" x2="75" y2="166" stroke="#64748b" strokeWidth="0.8" opacity="0.3" />
+
+          {/* Parabrisas delantero */}
+          <path d="M100 38 L100 162 L130 155 L130 45 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1.5" opacity="0.85" />
+          <path d="M104 50 L104 90 L112 88 L112 52 Z" fill="white" opacity="0.06" />
+
+          {/* Techo/cabina */}
+          <rect x="130" y="30" width="160" height="140" rx="4" fill="url(#roofGradS)" stroke="#334155" strokeWidth="1" />
+          <line x1="130" y1="100" x2="290" y2="100" stroke="#475569" strokeWidth="1" strokeDasharray="6,4" opacity="0.4" />
+
+          {/* Vidrio trasero */}
+          <path d="M290 45 L290 155 L320 162 L320 38 Z" fill="#1e3a5f" stroke="#334155" strokeWidth="1.5" opacity="0.85" />
+
+          {/* Maletero */}
+          <path d="M320 30 L382 30 Q400 30 406 50 L410 100 L406 150 Q400 170 382 170 L320 170 Z"
+            fill="url(#trunkGradS)" stroke="#475569" strokeWidth="1.5" />
+          <line x1="365" y1="38" x2="365" y2="162" stroke="#64748b" strokeWidth="1" opacity="0.4" />
+          <line x1="345" y1="34" x2="345" y2="166" stroke="#64748b" strokeWidth="0.8" opacity="0.3" />
+
+          {/* Faros delanteros */}
+          <path d="M10 42 Q8 50 10 62 L22 58 L22 46 Z" fill="#fbbf24" opacity="0.9" />
+          <path d="M10 138 Q8 150 10 158 L22 154 L22 142 Z" fill="#fbbf24" opacity="0.9" />
+          <rect x="10" y="68" width="12" height="64" rx="3" fill="#fef3c7" opacity="0.3" />
+
+          {/* Faros traseros */}
+          <path d="M410 42 Q412 50 410 62 L398 58 L398 46 Z" fill="#ef4444" opacity="0.9" />
+          <path d="M410 138 Q412 150 410 158 L398 154 L398 142 Z" fill="#ef4444" opacity="0.9" />
+          <rect x="398" y="68" width="12" height="64" rx="3" fill="#fecaca" opacity="0.3" />
+
+          {/* Espejos */}
+          <path d="M108 30 L108 22 Q118 18 128 22 L128 30 Z" fill="#334155" stroke="#475569" strokeWidth="1" />
+          <path d="M108 170 L108 178 Q118 182 128 178 L128 170 Z" fill="#334155" stroke="#475569" strokeWidth="1" />
+
+          {/* Líneas de puertas */}
+          <line x1="210" y1="30" x2="210" y2="170" stroke="#64748b" strokeWidth="1.5" opacity="0.5" />
+          <rect x="162" y="34" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          <rect x="162" y="161" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          <rect x="240" y="34" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+          <rect x="240" y="161" width="18" height="5" rx="2.5" fill="#64748b" opacity="0.8" />
+
+          {/* Antena */}
+          <line x1="260" y1="30" x2="260" y2="18" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" opacity="0.6" />
+          <circle cx="260" cy="17" r="2" fill="#64748b" opacity="0.6" />
+
+          {/* Etiquetas */}
+          <text x="18" y="12" fontSize="8" fill="#64748b" fontFamily="monospace" opacity="0.7">◄ FRENTE</text>
+          <text x="360" y="12" fontSize="8" fill="#64748b" fontFamily="monospace" opacity="0.7">ATRÁS ►</text>
+        </svg>
+
+        {/* Asientos superpuestos */}
+        {/* Fila delantera: Copiloto + Chofer */}
+        <div className="absolute" style={{ left: 170, top: 22 }}>
+          <div className="flex flex-col items-center gap-1">
+            {renderSeatBtn(copilot)}
+          </div>
+        </div>
+        {/* Chofer (volante) */}
+        <div className="absolute flex flex-col items-center" style={{ left: 175, top: 132 }}>
+          <div className="rounded-lg border-2 border-slate-500/60 flex items-center justify-center"
+            style={{ width: 48, height: 48, background: "rgba(100,116,139,0.25)" }}>
+            <SteeringWheel />
+          </div>
+          <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide mt-0.5">Chofer</span>
+        </div>
+
+        {/* Fila trasera: 3 asientos */}
+        <div className="absolute flex flex-row gap-1" style={{ left: 265, top: 45 }}>
+          {backs.map((s: any) => (
+            <div key={s.id} className="flex flex-col items-center">
+              {renderSeatBtn(s)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // ─── Bus renderer (memoizado) ─────────────────────────────────────────────────
 const BusMap = memo(function BusMap({
   vehicleType, capacity, floor, occupied, selectedSeat, onSeatClick,
@@ -299,6 +495,22 @@ const BusMap = memo(function BusMap({
   onLabelChange: (id: string, val: string) => void;
   seatTemplate?: any;
 }) {
+  // ── AUTO: usar layout realista de sedan ─────────────────────────────────
+  if (vehicleType === "AUTO") {
+    return (
+      <AutoSaleMap
+        occupied={occupied}
+        selectedSeat={selectedSeat}
+        onSeatClick={onSeatClick}
+        primaryColor={primaryColor}
+        editMode={editMode}
+        seatLabels={seatLabels}
+        onLabelChange={onLabelChange}
+        seatTemplate={seatTemplate}
+      />
+    );
+  }
+
   const isTwoDeck = vehicleType === "BUS_2P";
   const SZ = 68;
 
