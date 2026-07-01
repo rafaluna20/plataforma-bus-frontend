@@ -105,6 +105,13 @@ function buildDefaultLabels(isTwoDeck: boolean, capacity: number): Record<string
   return labels;
 }
 
+const parcelStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  RECEIVED:         { label: "Recibido",     color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
+  IN_TRANSIT:       { label: "En tránsito",  color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
+  READY_FOR_PICKUP: { label: "Para retirar", color: "#06b6d4", bg: "rgba(6,182,212,0.12)" },
+  DELIVERED:        { label: "Entregado",    color: "#10b981", bg: "rgba(16,185,129,0.12)" },
+};
+
 // ─── Icono de asiento (memoizado) ────────────────────────────────────────────
 const SeatIcon = memo(function SeatIcon({
   color, label, size = 68,
@@ -1012,54 +1019,54 @@ export default function SeatMapModal({
     <div className="fixed inset-0 z-[100] flex flex-col" style={{ background: "#080d1a" }}>
 
       {/* ─── TOPBAR ──────────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-5 py-2.5 border-b border-white/8"
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b border-white/8"
         style={{ background: "rgba(8,13,26,0.98)" }}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <button onClick={onClose}
-            className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
+            className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors flex-shrink-0">
             <X className="w-4 h-4" />
           </button>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-extrabold uppercase tracking-wider" style={{ color: primaryColor }}>
-                {companyName}
-              </span>
-              <span className="text-slate-600 text-xs">·</span>
-              <span className="text-white text-xs font-semibold">{origin}</span>
-              <ArrowRight className="w-3 h-3 text-slate-500" />
-              <span className="text-white text-xs font-semibold">{destination}</span>
-              <span className="text-slate-600 text-xs">·</span>
-              <span className="text-slate-400 text-xs">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-white truncate">
+              <span className="truncate max-w-[80px] sm:max-w-[120px]">{origin}</span>
+              <ArrowRight className="w-3 h-3 text-slate-500 flex-shrink-0" />
+              <span className="truncate max-w-[80px] sm:max-w-[120px]">{destination}</span>
+              <span className="text-slate-500 text-[10px] ml-1 flex-shrink-0">
                 {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
-            <p className="text-slate-500 text-xs">{freeCount} asientos libres de {vehicleCapacity}</p>
+            <p className="text-slate-500 text-[10px] mt-0.5">{freeCount} libres de {vehicleCapacity}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
           {!editMode ? (
             <button onClick={() => setEditMode(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 text-xs font-semibold hover:bg-amber-500/10 transition-all">
-              <Pencil className="w-3.5 h-3.5" /> Editar numeración
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-500/40 text-amber-400 text-xs font-semibold hover:bg-amber-500/10 transition-all"
+              title="Editar numeración">
+              <Pencil className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Editar numeración</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button onClick={handleResetLabels}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-600 text-slate-400 text-xs font-semibold hover:bg-slate-800 transition-all">
-                <RotateCcw className="w-3.5 h-3.5" /> Restablecer
+                className="flex items-center justify-center p-1.5 rounded-xl border border-slate-600 text-slate-400 hover:bg-slate-800 transition-all"
+                title="Restablecer">
+                <RotateCcw className="w-3.5 h-3.5" />
               </button>
               <button onClick={handleSaveLabels}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white text-xs font-bold transition-all hover:opacity-90"
-                style={{ background: "#10b981" }}>
-                <Save className="w-3.5 h-3.5" /> Guardar
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-white text-xs font-bold transition-all hover:opacity-90"
+                style={{ background: "#10b981" }}
+                title="Guardar">
+                <Save className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Guardar</span>
               </button>
             </div>
           )}
           <div className="text-right">
-            <p className="text-3xl font-extrabold" style={{ color: primaryColor }}>
+            <p className="text-lg sm:text-2xl font-extrabold leading-none" style={{ color: primaryColor }}>
               S/ {price > 0 ? price.toFixed(2) : "—"}
             </p>
-            <p className="text-xs text-slate-500">por asiento</p>
+            <span className="text-[9px] text-slate-500 block mt-0.5">por asiento</span>
           </div>
         </div>
       </div>
@@ -1351,8 +1358,10 @@ export default function SeatMapModal({
           </div>
         </div>
 
-        {/* ── ZONA CENTRAL: MAPA ───────────────────────────────────────────── */}
-        <div className="flex-1 overflow-auto flex flex-col items-center justify-start py-4 px-4 gap-4"
+        {/* ── ZONA CENTRAL: MAPA O LISTAS EN MOVIL ───────────────────────────── */}
+        <div className={`flex-1 overflow-auto flex flex-col items-center justify-start py-4 px-3 sm:px-4 gap-4 ${
+          sidebarMode !== "pasajes" ? "hidden lg:flex" : "flex"
+        }`}
           style={{ background: "#0d1424" }}>
 
           {editMode && (
@@ -1366,7 +1375,7 @@ export default function SeatMapModal({
           )}
 
           {/* Leyenda horizontal compacta */}
-          <div className="w-full flex items-center justify-end gap-4 px-2">
+          <div className="w-full flex flex-wrap items-center justify-start sm:justify-end gap-3 px-2">
             {[
               { color: "#22c55e", label: "Libre",   count: freeCount },
               { color: "#ef4444", label: "Ocupado", count: occupied.length },
@@ -1395,8 +1404,8 @@ export default function SeatMapModal({
                   </span>
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
-                <div className="w-full overflow-x-auto">
-                  <div style={{ transform: "scale(0.8)", transformOrigin: "top center", display: "inline-block", width: "100%" }}>
+                <div className="w-full overflow-x-auto flex justify-start lg:justify-center">
+                  <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "15px" }}>
                     <BusMap {...busMapProps} floor={2} />
                   </div>
                 </div>
@@ -1415,8 +1424,8 @@ export default function SeatMapModal({
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
               )}
-              <div className="w-full overflow-x-auto flex justify-center">
-                <div style={{ transform: "scale(0.8)", transformOrigin: "top center", display: "inline-block" }}>
+              <div className="w-full overflow-x-auto flex justify-start lg:justify-center">
+                <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "15px" }}>
                   <BusMap {...busMapProps} floor={1} />
                 </div>
               </div>
@@ -1424,6 +1433,222 @@ export default function SeatMapModal({
 
           </div>
         </div>
+
+        {/* Mobile view for Passengers */}
+        {sidebarMode === "pasajeros" && (
+          <div className="w-full lg:hidden flex-1 overflow-y-auto space-y-4 px-4 py-4 bg-[#0d1424]">
+            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+              <h4 className="text-white font-bold text-sm">Manifiesto de Pasajeros</h4>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintPassengers}
+                  disabled={loadingPassengers || passengers.length === 0}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+                  title="Imprimir Manifiesto"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={loadPassengers}
+                  disabled={loadingPassengers}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+                  title="Actualizar"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingPassengers ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            </div>
+
+            {loadingPassengers && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+              </div>
+            )}
+
+            {passengersError && !loadingPassengers && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {passengersError}
+              </div>
+            )}
+
+            {!loadingPassengers && !passengersError && passengers.length === 0 && (
+              <div className="text-center py-12 border border-dashed border-white/5 rounded-2xl">
+                <Users className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">Sin pasajeros aún</p>
+              </div>
+            )}
+
+            {!loadingPassengers && passengers.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {passengers.map((p) => {
+                  const isPaid = p.paymentStatus === "PAID_DIGITAL" || p.paymentStatus === "PAID";
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-xl p-3 border border-white/8 hover:border-white/15 transition-all"
+                      style={{ background: "rgba(255,255,255,0.03)" }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center font-extrabold text-xs"
+                          style={{
+                            background: `${primaryColor}25`,
+                            color: primaryColor,
+                            border: `1px solid ${primaryColor}40`,
+                          }}
+                        >
+                          {p.seatId.replace(/\D/g, "")}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white text-xs font-semibold truncate">{p.name}</p>
+                          <p className="text-slate-500 text-[10px] truncate">{p.document}</p>
+                        </div>
+                        <div
+                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                          style={{ background: isPaid ? "#10b981" : "#f59e0b" }}
+                          title={isPaid ? "Pagado" : "Pago al abordar"}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1 mt-2 text-[10px] text-slate-500">
+                        <MapPin className="w-3 h-3 flex-shrink-0" style={{ color: primaryColor }} />
+                        <span className="truncate">{p.origin}</span>
+                        <ArrowRight className="w-3 h-3 flex-shrink-0" />
+                        <span className="truncate">{p.destination}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Mobile view for Encomiendas */}
+        {sidebarMode === "encomiendas" && (
+          <div className="w-full lg:hidden flex-1 overflow-y-auto space-y-4 px-4 py-4 bg-[#0d1424]">
+            <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+              <h4 className="text-white font-bold text-sm">Control de Encomiendas</h4>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrintParcels}
+                  disabled={loadingParcels || parcels.length === 0}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+                  title="Imprimir Manifiesto"
+                >
+                  <Printer className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={loadParcels}
+                  disabled={loadingParcels}
+                  className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
+                  title="Actualizar"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingParcels ? "animate-spin" : ""}`} />
+                </button>
+                <button
+                  onClick={() => setParcelModalOpen(true)}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-xs font-bold transition-all"
+                >
+                  + Registrar
+                </button>
+              </div>
+            </div>
+
+            {/* Buscador en mobile */}
+            <input
+              type="text"
+              value={parcelSearch}
+              onChange={e => setParcelSearch(e.target.value)}
+              placeholder="Buscar remitente, destinatario..."
+              className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-white/20 transition-colors"
+            />
+
+            {loadingParcels && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-400" />
+              </div>
+            )}
+
+            {parcelsError && !loadingParcels && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                {parcelsError}
+              </div>
+            )}
+
+            {!loadingParcels && !parcelsError && filteredParcels.length === 0 && (
+              <div className="text-center py-12 border border-dashed border-white/5 rounded-2xl">
+                <Package className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                <p className="text-slate-400 text-sm">Sin encomiendas registradas</p>
+              </div>
+            )}
+
+            {!loadingParcels && filteredParcels.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {filteredParcels.map((p) => {
+                  const isPaid = p.paymentStatus === "PAID_DIGITAL" || p.paymentStatus === "PAID";
+                  const pSt = parcelStatusConfig[p.status] || parcelStatusConfig.RECEIVED;
+                  const payS = p.paymentStatus === "PENDING_CASH"
+                    ? { label: "Pago pendiente", color: "#f59e0b" }
+                    : { label: "Pagado",         color: "#10b981" };
+                  return (
+                    <div
+                      key={p.id}
+                      className="rounded-xl p-3 border border-white/8 hover:border-white/15 transition-all flex flex-col gap-2"
+                      style={{ background: "rgba(255,255,255,0.02)" }}
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-8 h-8 rounded bg-amber-500/10 flex items-center justify-center flex-shrink-0 text-amber-400">
+                          <Package className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <p className="text-white text-xs font-semibold truncate">{p.senderName}</p>
+                            <span className="text-xs font-extrabold text-amber-400">S/ {Number(p.totalPrice).toFixed(2)}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 truncate">Dest: {p.receiverName}</p>
+                        </div>
+                      </div>
+
+                      {/* Tramo */}
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 bg-black/20 p-1.5 rounded">
+                        <MapPin className="w-3 h-3 text-amber-500" />
+                        <span className="truncate">{p.startWaypoint?.station?.name}</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                        <span className="truncate">{p.endWaypoint?.station?.name}</span>
+                      </div>
+
+                      {/* Detalles del paquete */}
+                      {(p.description || p.weightKg) && (
+                        <p className="text-[10px] text-slate-500 italic truncate">
+                          {p.description && `${p.description}`}
+                          {p.description && p.weightKg && " · "}
+                          {p.weightKg && `${p.weightKg} kg`}
+                        </p>
+                      )}
+
+                      {/* Selector de estado y pago */}
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/5">
+                        <span className="text-[10px] font-medium" style={{ color: isPaid ? "#10b981" : "#f59e0b" }}>
+                          {payS.label}
+                        </span>
+                        <select
+                          value={p.status}
+                          onChange={(e) => handleParcelStatusChange(p.id, e.target.value)}
+                          className="bg-slate-900 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-amber-500/50 cursor-pointer"
+                        >
+                          <option value="RECEIVED">Recibido</option>
+                          <option value="IN_TRANSIT">En viaje</option>
+                          <option value="READY_FOR_PICKUP">Listo retirar</option>
+                          <option value="DELIVERED">Entregado</option>
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ─── MODAL DE VENTA ──────────────────────────────────────────────────── */}
