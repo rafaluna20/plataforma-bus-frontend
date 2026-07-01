@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Phone, Mail, Globe, MapPin, Bus, ArrowRight,
@@ -77,6 +77,66 @@ const tripStatusConfig: Record<string, { label: string; color: string; bg: strin
 };
 
 type SidebarSection = "viajes" | "rutas" | "contacto" | "nosotros" | "mapa" | "admin-dashboard" | "admin-venta" | "admin-viajes" | "admin-rutas" | "admin-vehiculos" | "admin-vendedores" | "admin-perfil";
+
+// ─── COUNTDOWN BADGE COMPONENT ────────────────────────────────────────────────
+function CountdownBadge({ departureTime, isPast }: { departureTime: string; isPast: boolean }) {
+  const calcRemaining = () => {
+    const diff = new Date(departureTime).getTime() - Date.now();
+    return diff;
+  };
+
+  const [remaining, setRemaining] = useState(calcRemaining);
+
+  useEffect(() => {
+    // Only tick if departure is in the future and within 7 days
+    if (isPast || remaining <= 0 || remaining > 7 * 24 * 3600 * 1000) return;
+
+    // Tick every second when under 1 minute; every 30s otherwise
+    const interval = remaining < 60_000 ? 1000 : 30_000;
+    const timer = setInterval(() => {
+      const r = calcRemaining();
+      setRemaining(r);
+      if (r <= 0) clearInterval(timer);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [remaining, isPast, departureTime]);
+
+  const formatCountdown = (ms: number): { label: string; color: string; bg: string; pulse: boolean } => {
+    if (ms <= 0) return { label: "¡Partió!", color: "#94a3b8", bg: "rgba(148,163,184,0.1)", pulse: false };
+    const totalSec = Math.floor(ms / 1000);
+    const days = Math.floor(totalSec / 86400);
+    const hours = Math.floor((totalSec % 86400) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+
+    if (days >= 1) return { label: `Faltan ${days}d`, color: "#6366f1", bg: "rgba(99,102,241,0.1)", pulse: false };
+    if (hours >= 1) return { label: `Faltan ${hours}h`, color: "#f59e0b", bg: "rgba(245,158,11,0.1)", pulse: false };
+    if (mins >= 1) return { label: `Faltan ${mins}min`, color: "#f97316", bg: "rgba(249,115,22,0.12)", pulse: true };
+    return { label: `${secs}s`, color: "#ef4444", bg: "rgba(239,68,68,0.15)", pulse: true };
+  };
+
+  // Don't show badge for past trips or departures > 7 days away
+  if (isPast) {
+    return <span className="text-[10px] text-slate-600 font-semibold">Viaje finalizado</span>;
+  }
+  if (remaining > 7 * 24 * 3600 * 1000) {
+    // For far-future trips: just show the date
+    const dateStr = new Date(departureTime).toLocaleDateString("es-PE", { weekday: "short", day: "2-digit", month: "short" });
+    return <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wide">{dateStr}</span>;
+  }
+
+  const { label, color, bg, pulse } = formatCountdown(remaining);
+
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wide border ${pulse ? "animate-pulse" : ""}`}
+      style={{ background: bg, borderColor: `${color}30`, color }}
+    >
+      <Clock className="w-3 h-3 shrink-0" />
+      {label}
+    </span>
+  );
+}
 
 export default function EmpresaPublicaPage() {
   const { slug } = useParams();
@@ -1141,11 +1201,11 @@ export default function EmpresaPublicaPage() {
                             {/* ── INFO IZQUIERDA (REDISEÑADA) ─────────────── */}
                             <div className="flex-1 p-4 space-y-3 min-w-0 flex flex-col justify-between">
 
-                              {/* Encabezado: Hora + Estado */}
+                              {/* Encabezado: Hora + Fecha unificada + Estado */}
                               <div className="flex justify-between items-start gap-2">
-                                <div className="flex items-baseline gap-2">
-                                  <span className="text-xl font-extrabold text-white tracking-tight">{timeStr}</span>
-                                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">{dateStr}</span>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xl font-extrabold text-white tracking-tight leading-none">{timeStr}</span>
+                                  <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">{dateStr}</span>
                                 </div>
                                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider shrink-0 transition-all"
                                   style={{
@@ -1269,11 +1329,9 @@ export default function EmpresaPublicaPage() {
                             </div>
                           </div>
 
-                          {/* Fecha en footer */}
+                          {/* Footer: Contador regresivo + CTA */}
                           <div className="px-4 py-2 border-t border-white/5 flex justify-between items-center">
-                            <span className="text-xs text-slate-500">
-                              {departure.toLocaleDateString("es-PE", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })}
-                            </span>
+                            <CountdownBadge departureTime={trip.departureTime} isPast={isPast} />
                             <span className="text-xs font-medium flex items-center gap-1 group-hover:gap-2 transition-all"
                               style={{ color: primaryColor }}>
                               Reservar <ArrowRight className="w-3 h-3" />
