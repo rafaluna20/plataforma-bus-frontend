@@ -345,10 +345,16 @@ export default function EmpresaAdminViajesPage() {
     ? trips
     : trips.filter(t => t.status === filterStatus);
 
-  const sessionUser = typeof window !== "undefined"
-    ? (() => { try { const u = localStorage.getItem("user"); return u ? JSON.parse(u) : null; } catch { return null; } })()
-    : null;
-  const isAdmin = sessionUser?.role === "ADMIN" || sessionUser?.role === "SUPER_ADMIN";
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    try {
+      const u = localStorage.getItem("user");
+      if (u) {
+        const parsed = JSON.parse(u);
+        setIsAdmin(parsed?.role === "ADMIN" || parsed?.role === "SUPER_ADMIN");
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   // MEJORA 3 — estados donde se permite editar
   const EDITABLE_STATUSES = ["SCHEDULED", "BOARDING"];
