@@ -7,7 +7,7 @@ import {
   Bus, Ticket, BarChart3, Clock, Users, ArrowRight,
   RefreshCw, TrendingUp, CheckCircle2, AlertCircle, Activity
 } from "lucide-react";
-import { authFetch, getCurrentUser } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/auth";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
@@ -60,11 +60,11 @@ export default function EmpresaAdminDashboard() {
       setPrimaryColor(companyData.company.primaryColor || "#6366f1");
       setSecondaryColor(companyData.company.secondaryColor || "#8b5cf6");
 
-      // Cargar viajes de la empresa
+      // Cargar viajes usando endpoint público (accesible para todos los roles)
       const companyId = companyData.company.id;
-      const tripsRes = await authFetch(`${API}/api/v1/management/trips/company/${companyId}`);
+      const tripsRes = await fetch(`${API}/api/v1/trips/search?companyId=${companyId}&limit=100`);
       const tripsData = await tripsRes.json();
-      setTrips(tripsData.trips || []);
+      setTrips(tripsData.trips || tripsData.data || []);
     } catch { }
     finally { setLoading(false); }
   }

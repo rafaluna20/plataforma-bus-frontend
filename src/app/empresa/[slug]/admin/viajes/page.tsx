@@ -157,19 +157,33 @@ export default function EmpresaAdminViajesPage() {
       const cid = compData.company?.id;
       setCompanyId(cid);
 
-      const [tripsRes, routesRes, vehiclesRes] = await Promise.all([
-        authFetch(`${API}/api/v1/management/trips/company/${cid}`),
-        authFetch(`${API}/api/v1/routes/company/${cid}`),
-        authFetch(`${API}/api/v1/vehicles/company/${cid}`),
-      ]);
+      // Detectar si el usuario tiene permisos de gestión completa
+      const { getCurrentUser } = await import("@/lib/auth");
+      const user = getCurrentUser();
+      const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
-      const [tripsData, routesData, vehiclesData] = await Promise.all([
-        tripsRes.json(), routesRes.json(), vehiclesRes.json(),
-      ]);
-
-      setTrips(tripsData.trips || []);
-      setRoutes(routesData.routes || []);
-      setVehicles(vehiclesData.vehicles || []);
+      if (isAdmin) {
+        // ADMIN: usar endpoints de management para tener control total
+        const [tripsRes, routesRes, vehiclesRes] = await Promise.all([
+          authFetch(`${API}/api/v1/management/trips/company/${cid}`),
+          authFetch(`${API}/api/v1/routes/company/${cid}`),
+          authFetch(`${API}/api/v1/vehicles/company/${cid}`),
+        ]);
+        const [tripsData, routesData, vehiclesData] = await Promise.all([
+          tripsRes.json(), routesRes.json(), vehiclesRes.json(),
+        ]);
+        setTrips(tripsData.trips || []);
+        setRoutes(routesData.routes || []);
+        setVehicles(vehiclesData.vehicles || []);
+      } else {
+        // AGENCY_SELLER: usar endpoint público (sin acceso a /management/)
+        const tripsRes = await fetch(`${API}/api/v1/trips/search?companyId=${cid}&limit=100`);
+        const tripsData = await tripsRes.json();
+        setTrips(tripsData.trips || tripsData.data || []);
+        // Vendedor no puede crear viajes, rutas ni vehículos → no necesita esas listas
+        setRoutes([]);
+        setVehicles([]);
+      }
     } catch (e: any) {
       setError(e.message || "Error al cargar datos");
     } finally {
@@ -242,6 +256,12 @@ export default function EmpresaAdminViajesPage() {
     ? trips
     : trips.filter(t => t.status === filterStatus);
 
+  // Determinar permisos según el rol del usuario en sesión
+  const sessionUser = typeof window !== "undefined"
+    ? (() => { try { const u = localStorage.getItem("user"); return u ? JSON.parse(u) : null; } catch { return null; } })()
+    : null;
+  const isAdmin = sessionUser?.role === "ADMIN" || sessionUser?.role === "SUPER_ADMIN";
+
   return (
     <div className="space-y-6">
 
@@ -261,12 +281,14 @@ export default function EmpresaAdminViajesPage() {
             className="p-2 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
             <RefreshCw className="w-5 h-5" />
           </button>
-          <button
-            onClick={() => { setShowForm(v => !v); setFormError(""); }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white transition-all hover:opacity-90"
-            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
-            <Plus className="w-5 h-5" /> Programar Viaje
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => { setShowForm(v => !v); setFormError(""); }}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-white transition-all hover:opacity-90"
+              style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+              <Plus className="w-5 h-5" /> Programar Viaje
+            </button>
+          )}
         </div>
       </div>
 
@@ -436,14 +458,14 @@ export default function EmpresaAdminViajesPage() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {trip.status === "SCHEDULED" && (
-                    <button
-                      onClick={() => handleOpenEdit(trip)}
-                      className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white hover:border-white/30 transition-colors"
-                      title="Editar / Reprogramar"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
+                  {trip.status === "SCHEDULED" && isAdmin && (
+                      <button
+                        onClick={() => handleOpenEdit(trip)}
+                        className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                        title="Editar viaje"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                   )}
                   <Link
                     href={`/empresa/${slugStr}/admin/venta?tripId=${trip.id}`}

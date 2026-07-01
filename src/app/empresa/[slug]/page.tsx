@@ -289,9 +289,12 @@ export default function EmpresaPublicaPage() {
       setLoginEmail("");
       setLoginPassword("");
       
-      // Activar panel admin dentro de la misma SPA (no redirigir a ruta inexistente)
-      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN" || user.role === "AGENCY_SELLER")) {
+      // Activar panel admin dentro de la misma SPA según el rol del usuario
+      if (user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN")) {
         setActiveSection("admin-dashboard");
+      } else if (user && user.role === "AGENCY_SELLER") {
+        // El vendedor va directo a Venta de Pasajes (no tiene acceso a endpoints de management)
+        setActiveSection("admin-venta");
       }
     } catch (err: any) {
       setLoginError(err.message || "Credenciales incorrectas.");
