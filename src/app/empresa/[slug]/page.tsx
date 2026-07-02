@@ -210,6 +210,17 @@ export default function EmpresaPublicaPage() {
     }
   }, [company?.id, currentUser, activeSection, isCompanyStaff]);
 
+  // Refrescar los viajes al volver a la sección "Nuestros Viajes" desde el panel
+  // administrativo (p. ej. tras vender un pasaje), para reflejar los asientos vendidos.
+  const previousSectionRef = useRef<SidebarSection>("viajes");
+  useEffect(() => {
+    const cameFromAdmin = previousSectionRef.current !== "viajes";
+    previousSectionRef.current = activeSection;
+    if (activeSection === "viajes" && cameFromAdmin && company) {
+      loadTrips(company.id, { origin, destination, date, vehicleType: vehicleFilter });
+    }
+  }, [activeSection]);
+
   useEffect(() => {
     // Definimos imágenes por defecto si la empresa no ha subido ninguna
     const images = company?.sliderImages?.filter(Boolean).length 
@@ -1214,7 +1225,8 @@ export default function EmpresaPublicaPage() {
                       const statusInfo = tripStatusConfig[status] || tripStatusConfig.SCHEDULED;
                       const isPast = status === "COMPLETED" || status === "CANCELLED";
                       const availableSeats = trip.availableSeats ?? trip.vehicle?.capacity;
-                      const hasFewSeats = availableSeats <= 10;
+                      const isSoldOut = availableSeats <= 0;
+                      const hasFewSeats = !isSoldOut && availableSeats <= 10;
 
                       // Formato de hora: "10:05 PM"
                       const timeStr = departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })
@@ -1321,7 +1333,11 @@ export default function EmpresaPublicaPage() {
                                   {typeLabel} • {trip.vehicle?.plateNumber}
                                 </span>
                                 <div>
-                                  {hasFewSeats ? (
+                                  {isSoldOut ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20 uppercase tracking-wider">
+                                      🚫 Agotado
+                                    </span>
+                                  ) : hasFewSeats ? (
                                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[9px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse uppercase tracking-wider">
                                       ⚠️ ¡Últimos {availableSeats}!
                                     </span>
