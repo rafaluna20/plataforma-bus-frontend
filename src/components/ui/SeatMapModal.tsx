@@ -1280,11 +1280,43 @@ export default function SeatMapModal({
         </div>
       </div>
 
+      {/* ── TAB BAR MÓVIL (reemplaza al sidebar en pantallas < lg) ──────────── */}
+      <div className="lg:hidden flex-shrink-0 grid grid-cols-3 gap-1.5 px-3 py-2 border-b border-white/8"
+        style={{ background: "#080d1a" }}>
+        <button
+          onClick={() => setSidebarMode("pasajes")}
+          className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+          style={sidebarMode === "pasajes"
+            ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
+            : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+          <TicketCheck className="w-4 h-4" />
+          <span>Venta</span>
+        </button>
+        <button
+          onClick={() => setSidebarMode("pasajeros")}
+          className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+          style={sidebarMode === "pasajeros"
+            ? { background: "#6366f125", color: "#818cf8", border: "1px solid #6366f150" }
+            : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+          <Users className="w-4 h-4" />
+          <span>Pasajeros ({occupied.length})</span>
+        </button>
+        <button
+          onClick={() => setSidebarMode("encomiendas")}
+          className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+          style={sidebarMode === "encomiendas"
+            ? { background: "#f59e0b25", color: "#f59e0b", border: "1px solid #f59e0b50" }
+            : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+          <Package className="w-4 h-4" />
+          <span>Encomiendas</span>
+        </button>
+      </div>
+
       {/* ─── CUERPO ──────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
 
-        {/* ── SIDEBAR IZQUIERDO ─────────────────────────────────────────────── */}
-        <div className="w-56 flex-shrink-0 border-r border-white/8 flex flex-col"
+        {/* ── SIDEBAR IZQUIERDO (solo desktop — en movil se usa la tab bar de arriba) ── */}
+        <div className="hidden lg:flex w-56 flex-shrink-0 border-r border-white/8 lg:flex-col"
           style={{ background: "#080d1a" }}>
           <div className="p-3 flex flex-col gap-2 border-b border-white/8">
             <button
