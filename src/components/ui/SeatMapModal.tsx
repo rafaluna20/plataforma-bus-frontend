@@ -286,6 +286,8 @@ const PostCol = memo(function PostCol() {
 });
 
 // ─── AutoSaleMap — Vista de planta del auto para venta de pasajes ─────────────
+// Layout idéntico al de SeatConfigEditor: Copiloto arriba-izq, Chofer abajo-izq,
+// Asientos 2,3,4 en COLUMNA a la derecha. Responsive para móvil.
 const AutoSaleMap = memo(function AutoSaleMap({
   occupied, selectedSeat, onSeatClick, primaryColor, editMode, seatLabels, onLabelChange, seatTemplate,
 }: {
@@ -298,7 +300,6 @@ const AutoSaleMap = memo(function AutoSaleMap({
   seatTemplate?: any;
 }) {
   const occupiedSet = useMemo(() => new Set(occupied), [occupied]);
-  const SZ = 52; // tamaño de asientos para venta
 
   // Extraer asientos del template
   const templateSeats: any[] = useMemo(() => {
@@ -321,7 +322,7 @@ const AutoSaleMap = memo(function AutoSaleMap({
   const copilot = copilotSeat || allSeats[0];
   const backs = backSeats.length > 0 ? backSeats : allSeats.slice(1);
 
-  function renderSeatBtn(seat: any) {
+  function renderSeatBtn(seat: any, size = 52) {
     const id = seat.id;
     const label = seatLabels[id] ?? seat.label ?? id.replace(/\D/g, "");
     const isOcc = occupiedSet.has(id);
@@ -341,18 +342,15 @@ const AutoSaleMap = memo(function AutoSaleMap({
     );
   }
 
-  // Dimensiones del contenedor (escalado +10% del viewBox 420×200)
-  const W = 550, H = 260;
-
   return (
-    <div className="flex flex-col items-center gap-3 select-none">
-      <div className="relative" style={{ width: W, height: H }}>
-        {/* SVG del auto en vista de planta */}
+    <div className="flex flex-col items-center gap-3 select-none w-full">
+      {/* Contenedor responsive: max-width 550px, aspect-ratio 420/200 */}
+      <div className="relative w-full" style={{ maxWidth: 550, aspectRatio: "420 / 200" }}>
+        {/* SVG del auto — escala al 100% del contenedor */}
         <svg
           viewBox="0 0 420 200"
-          width={W}
-          height={H}
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          preserveAspectRatio="xMidYMid meet"
           style={{ overflow: "visible" }}
         >
           <defs>
@@ -452,15 +450,14 @@ const AutoSaleMap = memo(function AutoSaleMap({
           <text x="360" y="12" fontSize="8" fill="#64748b" fontFamily="monospace" opacity="0.7">ATRÁS ►</text>
         </svg>
 
-        {/* Asientos superpuestos */}
-        {/* Fila delantera: Copiloto + Chofer */}
-        <div className="absolute" style={{ left: 170, top: 22 }}>
-          <div className="flex flex-col items-center gap-1">
-            {renderSeatBtn(copilot)}
-          </div>
+        {/* ── Asientos superpuestos con posiciones porcentuales ── */}
+        {/* Copiloto (1) — arriba izquierda de la cabina */}
+        <div className="absolute" style={{ left: "31%", top: "10%" }}>
+          {renderSeatBtn(copilot)}
         </div>
-        {/* Chofer (volante) */}
-        <div className="absolute flex flex-col items-center" style={{ left: 175, top: 132 }}>
+
+        {/* Chofer (volante) — abajo izquierda de la cabina */}
+        <div className="absolute flex flex-col items-center" style={{ left: "32%", top: "55%" }}>
           <div className="rounded-lg border-2 border-slate-500/60 flex items-center justify-center"
             style={{ width: 48, height: 48, background: "rgba(100,116,139,0.25)" }}>
             <SteeringWheel />
@@ -468,8 +465,8 @@ const AutoSaleMap = memo(function AutoSaleMap({
           <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wide mt-0.5">Chofer</span>
         </div>
 
-        {/* Fila trasera: 3 asientos */}
-        <div className="absolute flex flex-row gap-1" style={{ left: 265, top: 45 }}>
+        {/* Asientos traseros 2, 3, 4 — en COLUMNA a la derecha de la cabina */}
+        <div className="absolute flex flex-col gap-0" style={{ left: "52%", top: "5%" }}>
           {backs.map((s: any) => (
             <div key={s.id} className="flex flex-col items-center">
               {renderSeatBtn(s)}
