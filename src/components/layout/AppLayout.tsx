@@ -28,7 +28,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
         pathname === '/login' ||
         pathname === '/register' ||
         pathname?.startsWith('/checkout') ||
-        pathname?.startsWith('/reserva');
+        pathname?.startsWith('/reserva') ||
+        pathname?.startsWith('/driver');
 
     if (isFullScreenTask) {
         return <>{children}</>;

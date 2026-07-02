@@ -2,51 +2,100 @@
 
 import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
-import { Play, Square, Users, MapPin, Activity, Navigation } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Play, Square, Users, MapPin, Activity, Navigation, Bus, ArrowRight, Loader2 } from "lucide-react";
+import { authFetch, getAccessToken, getCurrentUser, type AuthUser } from "@/lib/auth";
+
+type AssignedTrip = {
+  id: string;
+  departureTime: string;
+  status: string;
+  route: { name: string; waypoints: { stopOrder: number; station: { name: string } }[] };
+  vehicle: { plateNumber: string; vehicleType: string };
+};
+
+type Passenger = { name: string; seatId: string; origin: string; destination: string; paymentStatus: string };
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 export default function DriverPanel() {
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  const [trips, setTrips] = useState<AssignedTrip[]>([]);
+  const [loadingTrips, setLoadingTrips] = useState(true);
+  const [tripsError, setTripsError] = useState("");
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+
   const [isTransmitting, setIsTransmitting] = useState(false);
-  const [gpsData, setGpsData] = useState<{ lat: number, lng: number, speed: number } | null>(null);
+  const [gpsData, setGpsData] = useState<{ lat: number; lng: number; speed: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [manifest, setManifest] = useState<any[]>([]);
+  const [manifest, setManifest] = useState<Passenger[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   const socketRef = useRef<Socket | null>(null);
   const watchIdRef = useRef<number | null>(null);
 
-  const TRIP_ID = "11111111-1111-1111-1111-111111111111";
-
-  // Fetch Manifest
+  // ── Autenticación ────────────────────────────────────────────────────────────
   useEffect(() => {
-    const fetchManifest = async () => {
+    const user = getCurrentUser();
+    setCurrentUser(user);
+    setAuthChecked(true);
+  }, []);
+
+  // ── Cargar mis viajes asignados ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentUser) return;
+    (async () => {
+      setLoadingTrips(true);
+      setTripsError("");
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-        const res = await fetch(`${apiUrl}/api/v1/trips/${TRIP_ID}/manifest`);
+        const res = await authFetch(`${API_URL}/api/v1/management/trips/my-driver`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Error al cargar tus viajes");
+        setTrips(data.trips || []);
+        if ((data.trips || []).length === 1) setSelectedTripId(data.trips[0].id);
+      } catch (e: any) {
+        setTripsError(e.message || "Error al cargar tus viajes");
+      } finally {
+        setLoadingTrips(false);
+      }
+    })();
+  }, [currentUser]);
+
+  // ── Manifiesto del viaje seleccionado ────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedTripId) { setManifest([]); return; }
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/trips/${selectedTripId}/manifest`);
         if (res.ok) {
           const data = await res.json();
-          setManifest(data.passengers);
+          setManifest(data.passengers || []);
         }
-      } catch (err) {
-        console.error("Error fetching manifest", err);
-      }
-    };
-    fetchManifest();
-  }, []);
+      } catch { /* silent */ }
+    })();
+  }, [selectedTripId]);
 
-  // Connect Socket
+  // ── Socket ───────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    socketRef.current = io(apiUrl);
-    
+    if (!currentUser) return;
+    socketRef.current = io(API_URL);
     socketRef.current.on("connect", () => setIsConnected(true));
     socketRef.current.on("disconnect", () => setIsConnected(false));
-
-    return () => {
-      socketRef.current?.disconnect();
-    };
-  }, []);
+    socketRef.current.on("error", (err: { message: string }) => {
+      setErrorMsg(err?.message || "Error del servidor de ubicación");
+      stopTrip();
+    });
+    return () => { socketRef.current?.disconnect(); };
+  }, [currentUser]);
 
   const startTrip = () => {
+    if (!selectedTripId) {
+      setErrorMsg("Selecciona un viaje antes de iniciar.");
+      return;
+    }
     if (!navigator.geolocation) {
       setErrorMsg("Tu dispositivo no soporta GPS.");
       return;
@@ -55,25 +104,21 @@ export default function DriverPanel() {
     setErrorMsg('');
     setIsTransmitting(true);
 
-    // Watch position
     watchIdRef.current = navigator.geolocation.watchPosition(
       (position) => {
         const { latitude, longitude, speed, heading } = position.coords;
-        
-        // Convertir m/s a km/h
         const speedKmH = speed ? Math.round(speed * 3.6) : 0;
-
         setGpsData({ lat: latitude, lng: longitude, speed: speedKmH });
 
-        // Emitir a Socket (La frecuencia la regula el navegador, pero podemos controlarlo si emite muy seguido)
-        // Para este MVP el navegador envía cuando hay cambios significativos
-        if (socketRef.current?.connected) {
+        const token = getAccessToken();
+        if (socketRef.current?.connected && token) {
           socketRef.current.emit("driver_update_location", {
-            tripId: TRIP_ID,
+            tripId: selectedTripId,
             lat: latitude,
             lng: longitude,
             speed: speedKmH,
-            bearing: heading || 0
+            bearing: heading || 0,
+            token,
           });
         }
       },
@@ -81,11 +126,7 @@ export default function DriverPanel() {
         setErrorMsg("Error GPS: " + error.message + ". Asegúrate de dar permisos de ubicación.");
         setIsTransmitting(false);
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000, // Emit frequency concept (every 10s max age)
-        timeout: 10000
-      }
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
     );
   };
 
@@ -97,13 +138,47 @@ export default function DriverPanel() {
     }
   };
 
+  // ── Estados de carga / auth ──────────────────────────────────────────────────
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <Navigation className="w-12 h-12 text-slate-600" />
+        <h1 className="text-xl font-bold">Modo Conductor</h1>
+        <p className="text-slate-400 text-sm">Debes iniciar sesión con tu cuenta de conductor.</p>
+        <button onClick={() => router.push("/login")} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-bold">
+          Ir al Login
+        </button>
+      </div>
+    );
+  }
+
+  if (currentUser.role !== "DRIVER" && currentUser.role !== "ADMIN" && currentUser.role !== "SUPER_ADMIN") {
+    return (
+      <div className="min-h-screen bg-[#0f172a] text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
+        <Navigation className="w-12 h-12 text-slate-600" />
+        <h1 className="text-xl font-bold">Modo Conductor</h1>
+        <p className="text-slate-400 text-sm">Esta pantalla es solo para conductores.</p>
+      </div>
+    );
+  }
+
+  const selectedTrip = trips.find(t => t.id === selectedTripId) || null;
+
   return (
     <div className="w-full max-w-md mx-auto min-h-screen bg-[#0f172a] text-white flex flex-col">
       {/* App Bar */}
       <div className="p-4 border-b border-white/10 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
         <div>
           <h1 className="text-xl font-bold">Modo Conductor</h1>
-          <p className="text-xs text-slate-400">Viaje #{TRIP_ID.substring(0, 8)}</p>
+          <p className="text-xs text-slate-400">{currentUser.name}</p>
         </div>
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`} />
@@ -111,15 +186,60 @@ export default function DriverPanel() {
         </div>
       </div>
 
-      {/* Main Controls */}
       <div className="p-6 flex-1 flex flex-col gap-6">
-        
+
+        {/* Selector de viaje asignado */}
+        {loadingTrips ? (
+          <div className="glass-card p-6 flex items-center justify-center">
+            <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+          </div>
+        ) : tripsError ? (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+            {tripsError}
+          </div>
+        ) : trips.length === 0 ? (
+          <div className="glass-card p-6 flex flex-col items-center text-center gap-2">
+            <Bus className="w-8 h-8 text-slate-600" />
+            <p className="text-slate-300 font-semibold">No tienes viajes asignados</p>
+            <p className="text-slate-500 text-xs">Cuando la empresa te asigne un viaje programado, aparecerá aquí.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-slate-400 font-semibold uppercase tracking-wide">Tu viaje</p>
+            {trips.map(trip => {
+              const wps = trip.route.waypoints?.slice().sort((a, b) => a.stopOrder - b.stopOrder) || [];
+              const orig = wps[0]?.station?.name || "—";
+              const dest = wps[wps.length - 1]?.station?.name || "—";
+              const isSelected = selectedTripId === trip.id;
+              return (
+                <button
+                  key={trip.id}
+                  onClick={() => !isTransmitting && setSelectedTripId(trip.id)}
+                  disabled={isTransmitting}
+                  className={`w-full text-left p-4 rounded-xl border transition-all ${
+                    isSelected ? "border-indigo-500 bg-indigo-500/10" : "border-white/10 bg-slate-900/50"
+                  } ${isTransmitting && !isSelected ? "opacity-40" : ""}`}
+                >
+                  <div className="flex items-center gap-1.5 text-sm font-semibold">
+                    <span>{orig}</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                    <span>{dest}</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {trip.vehicle.plateNumber} · {new Date(trip.departureTime).toLocaleString("es-PE", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* GPS Status Card */}
         <div className="glass-card p-6 flex flex-col items-center justify-center text-center gap-4">
           <div className={`w-20 h-20 rounded-full flex items-center justify-center ${isTransmitting ? 'bg-indigo-500 pulse-glow' : 'bg-slate-800'}`}>
             <Navigation className={`w-10 h-10 ${isTransmitting ? 'text-white' : 'text-slate-500'}`} />
           </div>
-          
+
           <div>
             <h2 className="text-xl font-bold mb-1">
               {isTransmitting ? 'Transmitiendo GPS' : 'GPS Apagado'}
@@ -134,14 +254,15 @@ export default function DriverPanel() {
           {errorMsg && <p className="text-red-400 text-sm bg-red-500/10 p-2 rounded">{errorMsg}</p>}
 
           {!isTransmitting ? (
-            <button 
+            <button
               onClick={startTrip}
-              className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
+              disabled={!selectedTripId}
+              className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/25"
             >
               <Play className="w-5 h-5 fill-current" /> INICIAR VIAJE
             </button>
           ) : (
-            <button 
+            <button
               onClick={stopTrip}
               className="w-full py-4 bg-red-500 hover:bg-red-600 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-500/25"
             >
@@ -153,49 +274,50 @@ export default function DriverPanel() {
         {/* Dashboard Stats */}
         <div className="grid grid-cols-2 gap-4">
           <div className="glass-card p-4 flex flex-col">
-            <span className="text-slate-400 text-sm flex items-center gap-2 mb-2"><Activity className="w-4 h-4"/> Velocidad</span>
+            <span className="text-slate-400 text-sm flex items-center gap-2 mb-2"><Activity className="w-4 h-4" /> Velocidad</span>
             <span className="text-3xl font-bold">{gpsData?.speed || 0} <span className="text-sm font-normal text-slate-500">km/h</span></span>
           </div>
           <div className="glass-card p-4 flex flex-col">
-            <span className="text-slate-400 text-sm flex items-center gap-2 mb-2"><Users className="w-4 h-4"/> Pasajeros</span>
+            <span className="text-slate-400 text-sm flex items-center gap-2 mb-2"><Users className="w-4 h-4" /> Pasajeros</span>
             <span className="text-3xl font-bold">{manifest.length}</span>
           </div>
         </div>
 
         {/* Passenger Manifest */}
-        <div className="mt-4">
-          <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Manifiesto de Ruta</h3>
-          <div className="space-y-3">
-            {manifest.map((p, idx) => (
-              <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2">
-                <div className="flex justify-between items-start">
-                  <span className="font-bold text-lg">{p.name}</span>
-                  <span className="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded text-xs font-bold border border-indigo-500/50">
-                    Asiento {p.seatId}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-1 text-sm text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500" /> Sube: {p.origin}
+        {selectedTrip && (
+          <div className="mt-4">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><MapPin className="w-5 h-5" /> Manifiesto de Ruta</h3>
+            <div className="space-y-3">
+              {manifest.map((p, idx) => (
+                <div key={idx} className="bg-slate-900/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold text-lg">{p.name}</span>
+                    <span className="bg-indigo-500/20 text-indigo-400 px-2 py-1 rounded text-xs font-bold border border-indigo-500/50">
+                      Asiento {p.seatId}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2 border-l-2 border-slate-700 ml-[3px] pl-[13px] py-1">
-                    Baja: {p.destination}
+                  <div className="flex flex-col gap-1 text-sm text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500" /> Sube: {p.origin}
+                    </div>
+                    <div className="flex items-center gap-2 border-l-2 border-slate-700 ml-[3px] pl-[13px] py-1">
+                      Baja: {p.destination}
+                    </div>
+                  </div>
+                  <div className="mt-2 text-xs font-medium text-emerald-400 bg-emerald-400/10 self-start px-2 py-1 rounded">
+                    {p.paymentStatus}
                   </div>
                 </div>
-                <div className="mt-2 text-xs font-medium text-emerald-400 bg-emerald-400/10 self-start px-2 py-1 rounded">
-                  {p.paymentStatus}
-                </div>
-              </div>
-            ))}
+              ))}
 
-            {manifest.length === 0 && (
-              <div className="text-center text-slate-500 py-8">
-                Aún no hay pasajeros confirmados
-              </div>
-            )}
+              {manifest.length === 0 && (
+                <div className="text-center text-slate-500 py-8">
+                  Aún no hay pasajeros confirmados
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-
+        )}
       </div>
     </div>
   );

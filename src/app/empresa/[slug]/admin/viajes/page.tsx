@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Bus, Plus, AlertCircle, CheckCircle2, RefreshCw,
   Clock, ArrowRight, Activity, Edit2, X, AlertTriangle,
-  Copy, XCircle, ChevronDown,
+  Copy, XCircle, ChevronDown, UserRound,
 } from "lucide-react";
 import { authFetch } from "@/lib/auth";
 
@@ -18,10 +18,12 @@ type Trip = {
   status: string;
   route: { id: string; name: string; waypoints: any[] };
   vehicle: { id: string; plateNumber: string; vehicleType: string; capacity: number };
+  driver?: { id: string; name: string; phone: string | null; docNum: string | null } | null;
 };
 
 type Route = { id: string; name: string };
 type Vehicle = { id: string; plateNumber: string; vehicleType: string; capacity: number };
+type Driver = { id: string; name: string; email: string; docNum?: string | null; phone?: string | null };
 
 const statusConfig: Record<string, { label: string; cls: string }> = {
   SCHEDULED:  { label: "Programado",  cls: "text-slate-400 bg-slate-500/10 border-slate-500/20" },
@@ -54,19 +56,20 @@ export default function EmpresaAdminViajesPage() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
   // ── Formulario nuevo viaje ──────────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
-  const [tripForm, setTripForm] = useState({ routeId: "", vehicleId: "", departureTime: "" });
+  const [tripForm, setTripForm] = useState({ routeId: "", vehicleId: "", departureTime: "", driverId: "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   // ── Formulario editar / reprogramar ────────────────────────────────────────
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  const [editForm, setEditForm] = useState({ vehicleId: "", departureTime: "" });
+  const [editForm, setEditForm] = useState({ vehicleId: "", departureTime: "", driverId: "" });
   const [editFormError, setEditFormError] = useState("");
   const [updatingTrip, setUpdatingTrip] = useState(false);
   const [editBookingsCount, setEditBookingsCount] = useState<number | null>(null);
@@ -105,6 +108,7 @@ export default function EmpresaAdminViajesPage() {
     setEditForm({
       vehicleId: trip.vehicle.id || "",
       departureTime: formatDateTimeLocal(trip.departureTime),
+      driverId: trip.driver?.id || "",
     });
     setEditFormError("");
     setEditConfirmed(false);
@@ -139,17 +143,19 @@ export default function EmpresaAdminViajesPage() {
     try {
       const res = await authFetch(`${API}/api/v1/management/trips/${editingTrip.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ vehicleId: editForm.vehicleId, departureTime: editForm.departureTime }),
+        body: JSON.stringify({ vehicleId: editForm.vehicleId, departureTime: editForm.departureTime, driverId: editForm.driverId }),
       });
       const data = await res.json();
       if (!res.ok) {
         const msg = data.error || "";
         if (msg.includes("futuro") || msg.includes("fecha"))
           setEditFormError("📅 La fecha de salida debe ser en el futuro.");
+        else if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
+          setEditFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
         else if (msg.includes("programado") || msg.includes("conflicto"))
           setEditFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
         else if (msg.includes("inactivo"))
-          setEditFormError("🔴 El vehículo seleccionado está inactivo.");
+          setEditFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
         else
           setEditFormError(`❌ ${msg || "Error al reprogramar el viaje."}`);
         return;
@@ -233,12 +239,15 @@ export default function EmpresaAdminViajesPage() {
           routeId: duplicatingTrip.route.id,
           vehicleId: duplicatingTrip.vehicle.id,
           departureTime: duplicateDate,
+          driverId: duplicatingTrip.driver?.id,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         const msg = data.error || "";
-        if (msg.includes("conflicto") || msg.includes("programado"))
+        if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
+          setDuplicateError("🧑‍✈️ El conductor ya tiene un viaje asignado en ese horario.");
+        else if (msg.includes("conflicto") || msg.includes("programado"))
           setDuplicateError("🚌 El vehículo ya tiene un viaje en ese horario.");
         else
           setDuplicateError(`❌ ${msg || "Error al duplicar el viaje."}`);
@@ -272,23 +281,27 @@ export default function EmpresaAdminViajesPage() {
       const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
       if (isAdmin) {
-        const [tripsRes, routesRes, vehiclesRes] = await Promise.all([
+        const [tripsRes, routesRes, vehiclesRes, driversRes] = await Promise.all([
           authFetch(`${API}/api/v1/management/trips/company/${cid}`),
           authFetch(`${API}/api/v1/routes/company/${cid}`),
           authFetch(`${API}/api/v1/vehicles/company/${cid}`),
+          authFetch(`${API}/api/v1/admin/users?companyId=${cid}&role=DRIVER&limit=100`),
         ]);
-        const [tripsData, routesData, vehiclesData] = await Promise.all([
-          tripsRes.json(), routesRes.json(), vehiclesRes.json(),
+        const [tripsData, routesData, vehiclesData, driversData] = await Promise.all([
+          tripsRes.json(), routesRes.json(), vehiclesRes.json(), driversRes.json(),
         ]);
         setTrips(tripsData.trips || []);
         setRoutes(routesData.routes || []);
         setVehicles(vehiclesData.vehicles || []);
+        // El endpoint de usuarios devuelve solo conductores activos para asignar
+        setDrivers((driversData.users || driversData.data || []).filter((u: any) => u.isActive !== false));
       } else {
         const tripsRes = await fetch(`${API}/api/v1/trips/search?companyId=${cid}&limit=100`);
         const tripsData = await tripsRes.json();
         setTrips(tripsData.trips || tripsData.data || []);
         setRoutes([]);
         setVehicles([]);
+        setDrivers([]);
       }
     } catch (e: any) {
       setError(e.message || "Error al cargar datos");
@@ -314,20 +327,21 @@ export default function EmpresaAdminViajesPage() {
     try {
       const res = await authFetch(`${API}/api/v1/management/trips`, {
         method: "POST",
-        body: JSON.stringify({ routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime }),
+        body: JSON.stringify({ routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime, driverId: tripForm.driverId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) {
         const msg = data.error || "";
         if (msg.includes("futuro") || msg.includes("fecha")) setFormError("📅 La fecha de salida debe ser en el futuro.");
+        else if (msg.includes("conductor") && msg.includes("ya tiene un viaje")) setFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
         else if (msg.includes("programado") || msg.includes("conflicto")) setFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
-        else if (msg.includes("inactivo")) setFormError("🔴 El vehículo seleccionado está inactivo.");
+        else if (msg.includes("inactivo")) setFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
         else setFormError(`❌ ${msg || "Error al programar el viaje."}`);
         return;
       }
       setSuccess("✅ Viaje programado exitosamente");
       setShowForm(false);
-      setTripForm({ routeId: "", vehicleId: "", departureTime: "" });
+      setTripForm({ routeId: "", vehicleId: "", departureTime: "", driverId: "" });
       loadData();
       setTimeout(() => setSuccess(""), 4000);
     } catch {
@@ -420,7 +434,7 @@ export default function EmpresaAdminViajesPage() {
           className="bg-slate-900/80 border border-indigo-500/30 rounded-2xl p-6 space-y-4">
           <h2 className="font-semibold text-white text-lg">Programar Nuevo Viaje</h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">Ruta *</label>
               <select
@@ -444,6 +458,23 @@ export default function EmpresaAdminViajesPage() {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Conductor (opcional)</label>
+              <select
+                value={tripForm.driverId}
+                onChange={e => setTripForm(f => ({ ...f, driverId: e.target.value }))}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
+                <option value="">Sin asignar</option>
+                {drivers.map(d => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}{d.docNum ? ` · DNI ${d.docNum}` : ""}
+                  </option>
+                ))}
+              </select>
+              {drivers.length === 0 && (
+                <p className="text-[11px] text-slate-500 mt-1">No hay conductores registrados. Agrégalos en "Conductores".</p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">Fecha y Hora de Salida *</label>
@@ -540,6 +571,19 @@ export default function EmpresaAdminViajesPage() {
                   <p className="text-xs text-slate-500 mt-0.5">
                     {vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · {trip.vehicle.plateNumber} · {trip.vehicle.capacity} asientos
                   </p>
+                  {isAdmin && (
+                    trip.driver ? (
+                      <p className="flex items-center gap-1 text-xs text-emerald-400/90 mt-1">
+                        <UserRound className="w-3 h-3 flex-shrink-0" /> {trip.driver.name}
+                      </p>
+                    ) : (
+                      ["SCHEDULED", "BOARDING", "IN_TRANSIT"].includes(trip.status) && (
+                        <p className="flex items-center gap-1 text-xs text-amber-400/90 mt-1">
+                          <UserRound className="w-3 h-3 flex-shrink-0" /> Sin conductor asignado
+                        </p>
+                      )
+                    )
+                  )}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-white">
@@ -660,6 +704,21 @@ export default function EmpresaAdminViajesPage() {
                   onChange={e => setEditForm(f => ({ ...f, departureTime: e.target.value }))}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Conductor (opcional)</label>
+                <select
+                  value={editForm.driverId}
+                  onChange={e => setEditForm(f => ({ ...f, driverId: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
+                  <option value="">Sin asignar</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}{d.docNum ? ` · DNI ${d.docNum}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* MEJORA 2 — checkbox obligatorio cuando hay pasajeros */}
