@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Phone, Mail, Globe, MapPin, Bus, ArrowRight,
   Clock, Users, AlertCircle, ArrowLeft, Search,
@@ -13,6 +13,7 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { useAuth } from "@/context/AuthContext";
 import dynamic from "next/dynamic";
+import EmpresaBottomNav from "@/components/layout/EmpresaBottomNav";
 
 const AdminDashboard = dynamic(() => import("./admin/page"), { ssr: false });
 const AdminVenta = dynamic(() => import("./admin/venta/page"), { ssr: false });
@@ -142,6 +143,7 @@ function CountdownBadge({ departureTime, isPast }: { departureTime: string; isPa
 export default function EmpresaPublicaPage() {
   const { slug } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [company, setCompany] = useState<CompanyPublic | null>(null);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,6 +203,19 @@ export default function EmpresaPublicaPage() {
     const user = getCurrentUser();
     setCurrentUser(user);
   }, [slug]);
+
+  // Navegación entrante desde otra ruta (ej. la barra inferior de /viaje/[tripId])
+  // vía ?section=admin-venta o ?menu=1. Se aplica una sola vez y se limpia la URL.
+  useEffect(() => {
+    const sectionParam = searchParams.get("section");
+    const menuParam = searchParams.get("menu");
+    if (!sectionParam && !menuParam) return;
+    if (sectionParam) setActiveSection(sectionParam as SidebarSection);
+    if (menuParam) setSidebarOpen(true);
+    const slugStr = Array.isArray(slug) ? slug[0] : slug;
+    router.replace(`/empresa/${slugStr}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (company && currentUser) {
@@ -627,7 +642,7 @@ export default function EmpresaPublicaPage() {
 
 
       {/* ─── LAYOUT PRINCIPAL: SIDEBAR + CONTENIDO ─────────────────────────── */}
-      <div className="relative z-10 flex flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 gap-6 pb-24 md:pb-6">
+      <div className="relative z-10 flex flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-6 gap-6 pb-24 lg:pb-6">
 
         {/* ─── SIDEBAR DE LA EMPRESA ─────────────────────────────────────── */}
         <aside className={`
@@ -1729,74 +1744,18 @@ export default function EmpresaPublicaPage() {
         </div>
       )}
 
-      {/* ─── BOTTOM NAVIGATION BAR (MOBILE ONLY) ─────────────────────────── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-slate-900/90 backdrop-blur-xl border-t border-white/5 px-2 pt-2 flex items-center justify-around shadow-2xl"
-        style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}>
-        <button
-          onClick={() => setActiveSection("viajes")}
-          className="flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all duration-300 relative active:scale-95"
-          style={{ color: activeSection === "viajes" ? primaryColor : "#94a3b8" }}
-        >
-          {activeSection === "viajes" && (
-            <span className="absolute inset-x-2 inset-y-0 rounded-xl opacity-10" style={{ backgroundColor: primaryColor }} />
-          )}
-          <Bus className={`w-5 h-5 transition-transform duration-300 ${activeSection === "viajes" ? "scale-110 -translate-y-0.5" : ""}`} />
-          <span className="text-[10px] font-semibold tracking-wide">Viajes</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSection("rutas")}
-          className="flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all duration-300 relative active:scale-95"
-          style={{ color: activeSection === "rutas" ? primaryColor : "#94a3b8" }}
-        >
-          {activeSection === "rutas" && (
-            <span className="absolute inset-x-2 inset-y-0 rounded-xl opacity-10" style={{ backgroundColor: primaryColor }} />
-          )}
-          <Route className={`w-5 h-5 transition-transform duration-300 ${activeSection === "rutas" ? "scale-110 -translate-y-0.5" : ""}`} />
-          <span className="text-[10px] font-semibold tracking-wide">Rutas</span>
-        </button>
-
-        <button
-          onClick={() => {
-            setActiveSection("mapa");
-            loadMapaViajes();
-          }}
-          className="flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all duration-300 relative active:scale-95"
-          style={{ color: activeSection === "mapa" ? "#60a5fa" : "#94a3b8" }}
-        >
-          {activeSection === "mapa" && (
-            <span className="absolute inset-x-2 inset-y-0 rounded-xl bg-blue-500/10" />
-          )}
-          <div className="relative">
-            <MapPin className={`w-5 h-5 transition-transform duration-300 ${activeSection === "mapa" ? "scale-110 -translate-y-0.5" : ""}`} />
-            <span className="absolute -top-1 -right-1 flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-            </span>
-          </div>
-          <span className="text-[10px] font-semibold tracking-wide">Flotas</span>
-        </button>
-
-        <button
-          onClick={() => setActiveSection("contacto")}
-          className="flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all duration-300 relative active:scale-95"
-          style={{ color: activeSection === "contacto" ? primaryColor : "#94a3b8" }}
-        >
-          {activeSection === "contacto" && (
-            <span className="absolute inset-x-2 inset-y-0 rounded-xl opacity-10" style={{ backgroundColor: primaryColor }} />
-          )}
-          <Phone className={`w-5 h-5 transition-transform duration-300 ${activeSection === "contacto" ? "scale-110 -translate-y-0.5" : ""}`} />
-          <span className="text-[10px] font-semibold tracking-wide">Contacto</span>
-        </button>
-
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="flex-1 flex flex-col items-center gap-1 py-1 rounded-xl transition-all duration-300 text-slate-400 hover:text-slate-200 active:scale-95"
-        >
-          <Menu className="w-5 h-5" />
-          <span className="text-[10px] font-semibold tracking-wide">Menú</span>
-        </button>
-      </div>
+      {/* ─── BOTTOM NAVIGATION BAR (MOBILE / TABLET, < lg) ─────────────────── */}
+      <EmpresaBottomNav
+        activeSection={activeSection}
+        onNavigate={(id) => {
+          if (id === "menu") { setSidebarOpen(true); return; }
+          if (id === "mapa") { setActiveSection("mapa"); loadMapaViajes(); return; }
+          setActiveSection(id as SidebarSection);
+        }}
+        primaryColor={primaryColor}
+        isCompanyStaff={isCompanyStaff}
+        userRole={currentUser?.role}
+      />
 
     </div>
   );

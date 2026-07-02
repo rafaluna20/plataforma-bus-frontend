@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import SeatMapModal from "@/components/ui/SeatMapModal";
 import ParcelModal from "@/components/trips/ParcelModal";
+import EmpresaBottomNav from "@/components/layout/EmpresaBottomNav";
 import { API_URL, calcTripPrice, calcTripPriceRange } from "@/lib/config";
 import { authFetch, getCurrentUser } from "@/lib/auth";
 import dynamic from "next/dynamic";
@@ -404,6 +405,7 @@ export default function EmpresaViajeDetailPage() {
   const typeLabel     = vehicleTypeLabel[vehicle.vehicleType] || vehicle.vehicleType;
   const freeSeats     = vehicle.capacity - occupiedSeats.length;
   const occupancyPct  = Math.round((occupiedSeats.length / vehicle.capacity) * 100);
+  const isCompanyStaff = !!(currentUser && ["SUPER_ADMIN", "ADMIN", "AGENCY_SELLER"].includes(currentUser.role));
 
   const parcelStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
     RECEIVED:         { label: "Recibido",     color: "#6366f1", bg: "rgba(99,102,241,0.12)" },
@@ -460,7 +462,7 @@ export default function EmpresaViajeDetailPage() {
         </div>
       </header>
 
-      <div className="relative z-10 max-w-6xl mx-auto px-4 md:px-6 py-6 space-y-6">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 md:px-6 py-6 pb-24 lg:pb-6 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── COLUMNA IZQUIERDA (2/3) ──────────────────────────────────── */}
@@ -1193,6 +1195,18 @@ export default function EmpresaViajeDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── BOTTOM NAVIGATION BAR (MOBILE / TABLET, < lg) ─────────────────── */}
+      <EmpresaBottomNav
+        activeSection={isCompanyStaff ? "admin-viajes" : "viajes"}
+        onNavigate={(id) => {
+          if (id === "menu") { router.push(`/empresa/${slugStr}?menu=1`); return; }
+          router.push(`/empresa/${slugStr}?section=${id}`);
+        }}
+        primaryColor={primaryColor}
+        isCompanyStaff={isCompanyStaff}
+        userRole={currentUser?.role}
+      />
 
       {/* ─── MODAL FULLSCREEN DE VENTA ─────────────────────────────────────── */}
       <SeatMapModal

@@ -22,6 +22,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
         return <>{children}</>;
     }
 
+    // Flujos de pantalla completa (pago, autenticación): sin chrome de plataforma
+    // (topbar/sidebar/bottom nav) para no distraer ni competir con la acción principal.
+    const isFullScreenTask =
+        pathname === '/login' ||
+        pathname === '/register' ||
+        pathname?.startsWith('/checkout') ||
+        pathname?.startsWith('/reserva');
+
+    if (isFullScreenTask) {
+        return <>{children}</>;
+    }
+
     return (
         <div className="flex flex-col min-h-screen bg-slate-950 lg:gap-6 text-slate-100 font-sans">
             <TopBar />

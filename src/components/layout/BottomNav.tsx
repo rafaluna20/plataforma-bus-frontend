@@ -12,12 +12,13 @@ export default function BottomNav() {
         { name: 'Inicio', href: '/', icon: Home },
         { name: 'Mapa', href: '/mapa', icon: Map },
         { name: 'Buscar', href: '/buscar', icon: Search },
-        { name: 'Reservas', href: '/reservas', icon: Ticket },
+        { name: 'Reservas', href: '/mis-viajes', icon: Ticket },
         { name: 'Admin', href: '/admin', icon: Briefcase },
     ];
 
     return (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-xl border-t border-slate-800/50 pb-safe z-50">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur-xl border-t border-slate-800/50 z-50"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
             <nav className="flex justify-around items-center h-16 px-2">
                 {navItems.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
