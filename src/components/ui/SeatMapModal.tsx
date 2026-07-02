@@ -343,9 +343,9 @@ const AutoSaleMap = memo(function AutoSaleMap({
   }
 
   return (
-    <div className="flex flex-col items-center gap-3 select-none w-full">
-      {/* Contenedor responsive: max-width 550px, aspect-ratio 420/200 */}
-      <div className="relative w-full" style={{ maxWidth: 550, aspectRatio: "420 / 200" }}>
+    <div className="flex flex-col items-center gap-3 select-none" style={{ width: "min(550px, 90vw)" }}>
+      {/* Contenedor responsive: ancho definido (evita colapso dentro de padres display:inline-block/auto-width), aspect-ratio 420/200 */}
+      <div className="relative w-full" style={{ aspectRatio: "420 / 200" }}>
         {/* SVG del auto — escala al 100% del contenedor */}
         <svg
           viewBox="0 0 420 200"
