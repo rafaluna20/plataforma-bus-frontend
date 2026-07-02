@@ -403,8 +403,19 @@ export default function EmpresaViajeDetailPage() {
   const statusInfo    = statusConfig[trip.status] || statusConfig.SCHEDULED;
   const vehicleImg    = vehicle.imageUrl || vehicleImages[vehicle.vehicleType] || vehicleImages.BUS_1P;
   const typeLabel     = vehicleTypeLabel[vehicle.vehicleType] || vehicle.vehicleType;
-  const freeSeats     = vehicle.capacity - occupiedSeats.length;
-  const occupancyPct  = Math.round((occupiedSeats.length / vehicle.capacity) * 100);
+  // La capacidad efectiva se deriva del seatTemplate (fuente de verdad de los
+  // asientos realmente renderizados); vehicle.capacity puede quedar desincronizado
+  // si se editó a mano en el formulario de vehículos.
+  const effectiveCapacity = (() => {
+    const st = vehicle.seatTemplate;
+    if (!st) return vehicle.capacity;
+    if (typeof st.totalSeats === "number" && st.totalSeats > 0) return st.totalSeats;
+    const raw = Array.isArray(st) ? st : (st.seats ?? []);
+    const activeCount = raw.filter((s: any) => s.active !== false).length;
+    return activeCount > 0 ? activeCount : vehicle.capacity;
+  })();
+  const freeSeats     = effectiveCapacity - occupiedSeats.length;
+  const occupancyPct  = Math.round((occupiedSeats.length / effectiveCapacity) * 100);
   const isCompanyStaff = !!(currentUser && ["SUPER_ADMIN", "ADMIN", "AGENCY_SELLER"].includes(currentUser.role));
 
   const parcelStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -573,7 +584,7 @@ export default function EmpresaViajeDetailPage() {
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       "Asientos numerados", "Equipaje incluido",
-                      `Capacidad: ${vehicle.capacity} pasajeros`,
+                      `Capacidad: ${effectiveCapacity} pasajeros`,
                       `Placa: ${vehicle.plateNumber}`,
                       `Modo: ${vehicle.serviceMode}`,
                       `Tipo: ${typeLabel}`,
@@ -645,14 +656,14 @@ export default function EmpresaViajeDetailPage() {
                   <div>
                     <h3 className="font-bold text-white text-lg">{typeLabel}</h3>
                     <p className="text-slate-400 text-sm">Placa: {vehicle.plateNumber}</p>
-                    <p className="text-slate-400 text-sm">Capacidad: {vehicle.capacity} asientos</p>
+                    <p className="text-slate-400 text-sm">Capacidad: {effectiveCapacity} asientos</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   {[
                     { label: "Tipo", value: typeLabel },
                     { label: "Servicio", value: vehicle.serviceMode },
-                    { label: "Asientos libres", value: `${freeSeats} de ${vehicle.capacity}` },
+                    { label: "Asientos libres", value: `${freeSeats} de ${effectiveCapacity}` },
                     { label: "Ocupación", value: `${occupancyPct}%` },
                   ].map((item, i) => (
                     <div key={i} className="bg-slate-800/50 rounded-xl p-3">
@@ -1089,7 +1100,7 @@ export default function EmpresaViajeDetailPage() {
                     )}
                     <div className="text-right pb-1">
                       <p className="text-xs font-bold" style={{ color: primaryColor }}>{freeSeats} libres</p>
-                      <p className="text-xs text-slate-500">de {vehicle.capacity} total</p>
+                      <p className="text-xs text-slate-500">de {effectiveCapacity} total</p>
                     </div>
                   </div>
                 </div>

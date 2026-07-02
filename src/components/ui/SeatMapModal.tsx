@@ -1035,7 +1035,21 @@ export default function SeatMapModal({
     [waypoints]
   );
 
-  const freeCount = vehicleCapacity - occupied.length;
+  // Capacidad efectiva: el seatTemplate es la fuente de verdad de qué asientos
+  // se renderizan realmente. vehicleCapacity (columna separada en la BD) puede
+  // quedar desincronizada si se editó el número a mano, así que solo se usa
+  // como fallback cuando no hay template.
+  const effectiveCapacity = useMemo(() => {
+    if (!seatTemplate) return vehicleCapacity;
+    if (typeof seatTemplate.totalSeats === "number" && seatTemplate.totalSeats > 0) {
+      return seatTemplate.totalSeats;
+    }
+    const raw = Array.isArray(seatTemplate) ? seatTemplate : (seatTemplate.seats ?? []);
+    const activeCount = raw.filter((s: any) => s.active !== false).length;
+    return activeCount > 0 ? activeCount : vehicleCapacity;
+  }, [seatTemplate, vehicleCapacity]);
+
+  const freeCount = effectiveCapacity - occupied.length;
 
   const handlePrintPassengers = () => {
     printPassengerManifest(
@@ -1244,7 +1258,7 @@ export default function SeatMapModal({
                 {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
-            <p className="text-slate-500 text-[10px] mt-0.5">{freeCount} libres de {vehicleCapacity}</p>
+            <p className="text-slate-500 text-[10px] mt-0.5">{freeCount} libres de {effectiveCapacity}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
