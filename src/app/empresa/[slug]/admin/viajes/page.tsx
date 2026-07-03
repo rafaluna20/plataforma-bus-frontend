@@ -17,7 +17,7 @@ type Trip = {
   departureTime: string;
   status: string;
   route: { id: string; name: string; waypoints: any[] };
-  vehicle: { id: string; plateNumber: string; vehicleType: string; capacity: number };
+  vehicle: { id: string; plateNumber: string; vehicleType: string; capacity: number; imageUrl?: string | null };
   driver?: { id: string; name: string; phone: string | null; docNum: string | null } | null;
 };
 
@@ -100,6 +100,34 @@ export default function EmpresaAdminViajesPage() {
     const d = new Date(dateInput);
     const tzoffset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - tzoffset).toISOString().slice(0, 16);
+  }
+
+  // ── Auxiliar — obtener origen/destino de forma inteligente ─────────────────
+  function getRoutePoints(trip: Trip) {
+    const wps = trip.route?.waypoints || [];
+    const orig = wps[0]?.station?.name;
+    const dest = wps[wps.length - 1]?.station?.name;
+
+    if (orig && dest) {
+      return { origin: orig, destination: dest };
+    }
+
+    // Fallback: Parsear el nombre de la ruta
+    const name = trip.route?.name || "";
+    const separators = [" - ", " -> ", " / ", " a ", " → ", "-"];
+    for (const sep of separators) {
+      if (name.includes(sep)) {
+        const parts = name.split(sep);
+        if (parts.length >= 2) {
+          return {
+            origin: parts[0].trim(),
+            destination: parts[parts.length - 1].trim()
+          };
+        }
+      }
+    }
+
+    return { origin: name || "—", destination: "" };
   }
 
   // ── Abrir modal editar ──────────────────────────────────────────────────────
@@ -564,9 +592,7 @@ export default function EmpresaAdminViajesPage() {
       ) : (
         <div className="space-y-3">
           {filteredTrips.map(trip => {
-            const wps  = trip.route.waypoints || [];
-            const orig = wps[0]?.station?.name || "—";
-            const dest = wps[wps.length - 1]?.station?.name || "—";
+            const { origin: rOrig, destination: rDest } = getRoutePoints(trip);
             const dep  = new Date(trip.departureTime);
             const st   = statusConfig[trip.status] || statusConfig.SCHEDULED;
             const canEdit   = EDITABLE_STATUSES.includes(trip.status) && isAdmin;
@@ -583,6 +609,8 @@ export default function EmpresaAdminViajesPage() {
             // Vehicle type icon label
             const vtLabel = vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType;
 
+            const vImg = trip.vehicle.imageUrl || (trip.vehicle as any).photoUrl;
+
             return (
               <div key={trip.id}
                 className="bg-slate-900/70 border border-white/6 rounded-2xl overflow-hidden hover:border-white/12 transition-all"
@@ -593,9 +621,9 @@ export default function EmpresaAdminViajesPage() {
 
                   {/* Vehicle photo / icon */}
                   <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-slate-800 border border-white/8 flex items-center justify-center">
-                    {(trip.vehicle as any).photoUrl ? (
+                    {vImg ? (
                       <img
-                        src={(trip.vehicle as any).photoUrl}
+                        src={vImg}
                         alt={trip.vehicle.plateNumber}
                         className="w-full h-full object-cover"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
@@ -616,13 +644,17 @@ export default function EmpresaAdminViajesPage() {
                   <div className="flex-1 min-w-0">
                     {/* Origin → Destination */}
                     <div className="flex items-center gap-1 flex-wrap">
-                      <span className="text-sm font-bold text-white leading-tight truncate max-w-[110px] sm:max-w-none">
-                        {orig}
+                      <span className="text-sm font-bold text-white leading-tight truncate max-w-[120px] sm:max-w-none" title={rOrig}>
+                        {rOrig}
                       </span>
-                      <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                      <span className="text-sm font-bold text-white leading-tight truncate max-w-[110px] sm:max-w-none">
-                        {dest}
-                      </span>
+                      {rDest && (
+                        <>
+                          <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                          <span className="text-sm font-bold text-white leading-tight truncate max-w-[120px] sm:max-w-none" title={rDest}>
+                            {rDest}
+                          </span>
+                        </>
+                      )}
                     </div>
 
                     {/* Date */}
