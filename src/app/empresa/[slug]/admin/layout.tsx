@@ -64,17 +64,15 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
         return;
       }
 
-      // 3. Si la URL usa un RUC/número o UUID (no es un slug de texto amigable),
-      //    y la empresa ya tiene slug → redirigir a URL amigable
-      const isSlugUrl = /^[a-z][a-z0-9-]+[a-z0-9]$/.test(slugStr ?? "");
-      if (!isSlugUrl && companyData.slug) {
-        router.replace(`/empresa/${companyData.slug}/admin`);
-        return;
-      }
-
-      // 4. Si la URL tiene un slug de texto pero no coincide con la empresa del admin
-      //    (solo aplica para ADMIN, no SUPER_ADMIN que puede ver cualquier empresa)
-      if (isSlugUrl && user.role !== "SUPER_ADMIN" && companyData.slug && companyData.slug !== slugStr) {
+      // 3. Si la URL no coincide con el slug canónico de la empresa del admin, redirigir a la
+      //    URL correcta (cubre bookmarks viejos con RUC/UUID). No aplica a SUPER_ADMIN, que
+      //    puede navegar al panel de cualquier empresa por su slug.
+      //    Se compara directamente contra companyData.slug en vez de adivinar con un regex si
+      //    la URL "parece" un slug amigable: un slug real puede ser puramente numérico (p.ej.
+      //    "43160220", generado desde el RUC) y el regex anterior lo rechazaba, provocando un
+      //    redirect a la MISMA url una y otra vez que nunca llegaba a marcar authorized=true
+      //    → pantalla en negro permanente al entrar al panel admin de esas empresas.
+      if (user.role !== "SUPER_ADMIN" && companyData.slug && companyData.slug !== slugStr) {
         router.replace(`/empresa/${companyData.slug}/admin`);
         return;
       }
