@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   Phone, Mail, Globe, MapPin, Bus, ArrowRight,
@@ -182,6 +182,23 @@ export default function EmpresaPublicaPage() {
   const [timeFilter, setTimeFilter] = useState("");
   const [searching, setSearching] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // ── Dropdown de origen/destino ───────────────────────────────────────────────
+  const [originOpen, setOriginOpen] = useState(false);
+  const [destOpen, setDestOpen]     = useState(false);
+  const originDropRef = useRef<HTMLDivElement>(null);
+  const destDropRef   = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (originDropRef.current && !originDropRef.current.contains(e.target as Node))
+        setOriginOpen(false);
+      if (destDropRef.current && !destDropRef.current.contains(e.target as Node))
+        setDestOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Contar filtros secundarios activos
   const activeFilterCount = [
@@ -390,6 +407,31 @@ export default function EmpresaPublicaPage() {
 
   // Rutas únicas de los viajes
   const uniqueRoutes = Array.from(new Set(trips.map(t => t.route?.name).filter(Boolean)));
+
+  // ── Ciudades disponibles derivadas de los viajes reales de la empresa ─────────
+  const availableOrigins = useMemo(() => {
+    const cities = new Set<string>();
+    trips.forEach(t => {
+      const wps = t.route?.waypoints || [];
+      const city = wps[0]?.station?.city || wps[0]?.station?.name;
+      if (city) cities.add(city);
+    });
+    return Array.from(cities).sort();
+  }, [trips]);
+
+  const availableDestinations = useMemo(() => {
+    const cities = new Set<string>();
+    trips.forEach(t => {
+      const wps = t.route?.waypoints || [];
+      if (wps.length < 2) return;
+      const firstCity = wps[0]?.station?.city || wps[0]?.station?.name;
+      const lastCity  = wps[wps.length - 1]?.station?.city || wps[wps.length - 1]?.station?.name;
+      if (!lastCity) return;
+      // Cascada: si hay origen seleccionado solo mostramos destinos alcanzables desde él
+      if (!origin || firstCity === origin) cities.add(lastCity);
+    });
+    return Array.from(cities).sort();
+  }, [trips, origin]);
 
   if (loading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -1042,19 +1084,132 @@ export default function EmpresaPublicaPage() {
               <form onSubmit={handleSearch}
                 className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 backdrop-blur-sm space-y-3">
                 <div className="flex flex-col md:flex-row gap-3 items-center">
-                  <div className="relative flex-1 w-full">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: primaryColor }} />
-                    <input value={origin} onChange={e => setOrigin(e.target.value)} placeholder="Ciudad de origen"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none transition-colors" />
+
+                  {/* ── Dropdown ORIGEN ───────────────────────────────────── */}
+                  <div className="relative flex-1 w-full" ref={originDropRef}>
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10 pointer-events-none" style={{ color: primaryColor }} />
+                    <button
+                      type="button"
+                      onClick={() => { setOriginOpen(o => !o); setDestOpen(false); }}
+                      className="w-full pl-9 pr-8 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-left text-sm focus:outline-none transition-colors flex items-center gap-1"
+                      style={{
+                        color: origin ? "#ffffff" : "#64748b",
+                        borderColor: originOpen ? `${primaryColor}60` : undefined,
+                        boxShadow: originOpen ? `0 0 0 2px ${primaryColor}20` : undefined,
+                      }}
+                    >
+                      <span className="flex-1 truncate">{origin || "Ciudad de origen"}</span>
+                      <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform duration-200 ${originOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {originOpen && (
+                      <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                        {/* Opción: cualquier origen */}
+                        {origin && (
+                          <button
+                            type="button"
+                            onClick={() => { setOrigin(""); setDestination(""); setOriginOpen(false); }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-slate-400 hover:bg-slate-700/70 transition-colors flex items-center gap-2 border-b border-slate-700/60"
+                          >
+                            <X className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Cualquier origen</span>
+                          </button>
+                        )}
+
+                        {availableOrigins.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-slate-500">Sin datos de rutas aún</p>
+                        ) : (
+                          <div className="max-h-44 overflow-y-auto">
+                            {availableOrigins.map(city => (
+                              <button
+                                key={city}
+                                type="button"
+                                onClick={() => { setOrigin(city); setDestination(""); setOriginOpen(false); }}
+                                className="w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 hover:bg-slate-700/70"
+                                style={origin === city
+                                  ? { background: `${primaryColor}20`, color: primaryColor, fontWeight: 700 }
+                                  : { color: "#cbd5e1" }
+                                }
+                              >
+                                <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                                {city}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <button type="button" onClick={() => { setOrigin(destination); setDestination(origin); }}
-                    className="p-2 rounded-xl border border-white/10 text-slate-400 hover:text-white transition-all hover:rotate-180 duration-300 shrink-0">
+
+                  {/* ── Botón intercambiar ────────────────────────────────── */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prev = origin;
+                      setOrigin(destination);
+                      setDestination(prev);
+                    }}
+                    className="p-2 rounded-xl border border-white/10 text-slate-400 hover:text-white transition-all hover:rotate-180 duration-300 shrink-0"
+                  >
                     <ArrowRightLeft className="w-4 h-4" />
                   </button>
-                  <div className="relative flex-1 w-full">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: secondaryColor }} />
-                    <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="Ciudad de destino"
-                      className="w-full pl-9 pr-4 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-white text-sm placeholder-slate-500 focus:outline-none transition-colors" />
+
+                  {/* ── Dropdown DESTINO ──────────────────────────────────── */}
+                  <div className="relative flex-1 w-full" ref={destDropRef}>
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 z-10 pointer-events-none" style={{ color: secondaryColor }} />
+                    <button
+                      type="button"
+                      onClick={() => { setDestOpen(o => !o); setOriginOpen(false); }}
+                      className="w-full pl-9 pr-8 py-2.5 bg-slate-800/60 border border-slate-700 rounded-xl text-left text-sm focus:outline-none transition-colors flex items-center gap-1"
+                      style={{
+                        color: destination ? "#ffffff" : "#64748b",
+                        borderColor: destOpen ? `${secondaryColor}60` : undefined,
+                        boxShadow: destOpen ? `0 0 0 2px ${secondaryColor}20` : undefined,
+                      }}
+                    >
+                      <span className="flex-1 truncate">{destination || "Ciudad de destino"}</span>
+                      <ChevronDown className={`w-4 h-4 text-slate-500 flex-shrink-0 transition-transform duration-200 ${destOpen ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {destOpen && (
+                      <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+                        {/* Opción: cualquier destino */}
+                        {destination && (
+                          <button
+                            type="button"
+                            onClick={() => { setDestination(""); setDestOpen(false); }}
+                            className="w-full px-4 py-2.5 text-left text-sm text-slate-400 hover:bg-slate-700/70 transition-colors flex items-center gap-2 border-b border-slate-700/60"
+                          >
+                            <X className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span>Cualquier destino</span>
+                          </button>
+                        )}
+
+                        {availableDestinations.length === 0 ? (
+                          <p className="px-4 py-3 text-sm text-slate-500">
+                            {origin ? `No hay destinos desde ${origin}` : "Sin datos de rutas aún"}
+                          </p>
+                        ) : (
+                          <div className="max-h-44 overflow-y-auto">
+                            {availableDestinations.map(city => (
+                              <button
+                                key={city}
+                                type="button"
+                                onClick={() => { setDestination(city); setDestOpen(false); }}
+                                className="w-full px-4 py-2.5 text-left text-sm transition-colors flex items-center gap-2 hover:bg-slate-700/70"
+                                style={destination === city
+                                  ? { background: `${secondaryColor}20`, color: secondaryColor, fontWeight: 700 }
+                                  : { color: "#cbd5e1" }
+                                }
+                              >
+                                <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
+                                {city}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="relative w-full md:w-44 shrink-0">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
