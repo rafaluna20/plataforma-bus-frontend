@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import Map, { Marker, NavigationControl } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { io, Socket } from "socket.io-client";
-import { Bus, Navigation, Clock, Activity } from "lucide-react";
+import { Bus, Navigation, Clock, Activity, DoorOpen, X } from "lucide-react";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -22,6 +22,10 @@ export default function TrackingPage({ params }: { params: Promise<{ tripId: str
   });
 
   const [isConnected, setIsConnected] = useState(false);
+
+  // Aviso de "el vehículo está abordando" — llega por socket en el momento en que el
+  // vendedor/admin marca el viaje como BOARDING desde el terminal (ver TripManagementService).
+  const [boardingAlert, setBoardingAlert] = useState<{ message: string; departureTime: string } | null>(null);
 
   useEffect(() => {
     // 1. Conectar al WebSocket
@@ -48,6 +52,11 @@ export default function TrackingPage({ params }: { params: Promise<{ tripId: str
       });
     });
 
+    // 4. Escuchar el aviso de abordaje (el bus está por salir)
+    socket.on("boarding_started", (data: { message: string; departureTime: string }) => {
+      setBoardingAlert(data);
+    });
+
     return () => {
       socket.emit("leave_trip", tripId);
       socket.disconnect();
@@ -55,8 +64,29 @@ export default function TrackingPage({ params }: { params: Promise<{ tripId: str
   }, [tripId]);
 
   return (
-    <div className="w-full h-[calc(100vh-8rem)] min-h-[600px] flex flex-col md:flex-row gap-6">
-      
+    <div className="w-full h-[calc(100vh-8rem)] min-h-[600px] flex flex-col gap-4">
+
+      {/* Aviso: el vehículo está abordando pasajeros */}
+      {boardingAlert && (
+        <div className="flex items-center gap-3 p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 animate-pulse">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+            <DoorOpen className="w-5 h-5 text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-amber-300 font-bold text-sm">¡Tu bus está abordando!</p>
+            <p className="text-amber-200/80 text-xs">{boardingAlert.message}</p>
+          </div>
+          <button
+            onClick={() => setBoardingAlert(null)}
+            className="p-1.5 rounded-lg text-amber-400/70 hover:text-amber-300 hover:bg-amber-500/10 transition-colors flex-shrink-0"
+            title="Cerrar aviso">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <div className="w-full flex-1 flex flex-col md:flex-row gap-6 min-h-0">
+
       {/* Sidebar: Trip Info */}
       <div className="w-full md:w-80 flex flex-col gap-4">
         <div className="glass-card p-6 flex-1 flex flex-col gap-6">
@@ -123,6 +153,7 @@ export default function TrackingPage({ params }: { params: Promise<{ tripId: str
         </Map>
       </div>
 
+      </div>
     </div>
   );
 }
