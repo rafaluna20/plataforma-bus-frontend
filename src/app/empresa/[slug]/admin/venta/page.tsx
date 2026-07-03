@@ -100,10 +100,38 @@ export default function EmpresaAdminVentaPage() {
   const [bookingError, setBookingError] = useState("");
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null);
 
-  // Ticket modal
+  // Ticket modal state fallback
   const [ticketOpen, setTicketOpen] = useState(false);
   const [lastPassengerName, setLastPassengerName] = useState("");
   const [lastPassengerDoc, setLastPassengerDoc] = useState("");
+
+  // ── Auxiliar — obtener origen/destino de forma inteligente ─────────────────
+  function getRoutePoints(trip: TripItem) {
+    const wps = trip.route?.waypoints || [];
+    const orig = wps[0]?.station?.name;
+    const dest = wps[wps.length - 1]?.station?.name;
+
+    if (orig && dest) {
+      return { origin: orig, destination: dest };
+    }
+
+    // Fallback: Parsear el nombre de la ruta
+    const name = trip.route?.name || "";
+    const separators = [" - ", " -> ", " / ", " a ", " → ", "-"];
+    for (const sep of separators) {
+      if (name.includes(sep)) {
+        const parts = name.split(sep);
+        if (parts.length >= 2) {
+          return {
+            origin: parts[0].trim(),
+            destination: parts[parts.length - 1].trim()
+          };
+        }
+      }
+    }
+
+    return { origin: name || "—", destination: "" };
+  }
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -159,33 +187,7 @@ export default function EmpresaAdminVentaPage() {
   }
 
   async function selectTrip(trip: TripItem) {
-    setSelectedTrip(trip);
-    setSelectedSeat("");
-    setReceipt(null);
-    setBookingError("");
-    setTicketOpen(false);
-    setLoadingTrip(true);
-
-    try {
-      const res = await fetch(`${API}/api/v1/trips/${trip.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setOccupiedSeats(data.occupiedSeats || []);
-        const wps = data.trip?.route?.waypoints || trip.route.waypoints;
-        if (wps.length >= 2) {
-          // Si es AGENCY_SELLER y tiene estación, preseleccionar origen
-          let initialStart = wps[0].id;
-          if (currentUser?.role === 'AGENCY_SELLER' && currentUser?.station?.id) {
-            const userStationId = currentUser.station.id;
-            const wpMatch = wps.find((w: any) => w.station.id === userStationId);
-            if (wpMatch) initialStart = wpMatch.id;
-          }
-          setStartWaypointId(initialStart);
-          setEndWaypointId(wps[wps.length - 1].id);
-        }
-      }
-    } catch { }
-    finally { setLoadingTrip(false); }
+    router.push(`/empresa/${slugStr}/viaje/${trip.id}?sell=1`);
   }
 
   function calcPrice(): number {
@@ -376,9 +378,7 @@ export default function EmpresaAdminVentaPage() {
             </div>
           ) : (
             trips.map(trip => {
-              const wps = trip.route.waypoints || [];
-              const orig = wps[0]?.station?.name || "—";
-              const dest = wps[wps.length - 1]?.station?.name || "—";
+              const { origin: rOrig, destination: rDest } = getRoutePoints(trip);
               const dep = new Date(trip.departureTime);
               const st = statusConfig[trip.status] || statusConfig.SCHEDULED;
               const isSelected = selectedTrip?.id === trip.id;
@@ -395,9 +395,13 @@ export default function EmpresaAdminVentaPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 text-sm font-semibold text-white truncate">
-                        <span className="truncate">{orig}</span>
-                        <ArrowRight className="w-3 h-3 flex-shrink-0 text-slate-500" />
-                        <span className="truncate">{dest}</span>
+                        <span className="truncate">{rOrig}</span>
+                        {rDest && (
+                          <>
+                            <ArrowRight className="w-3 h-3 flex-shrink-0 text-slate-500" />
+                            <span className="truncate">{rDest}</span>
+                          </>
+                        )}
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
                         {vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · {trip.vehicle.plateNumber}

@@ -160,6 +160,15 @@ export default function EmpresaViajeDetailPage() {
     setCurrentUser(getCurrentUser());
   }, []);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("sell") === "1" || params.get("venta") === "1") {
+        setSeatModalOpen(true);
+      }
+    }
+  }, []);
+
   // ─── Estado para la lista de pasajeros ───────────────────────────────────────
   const [passengers, setPassengers]         = useState<Passenger[]>([]);
   const [loadingPassengers, setLoadingPassengers] = useState(false);
