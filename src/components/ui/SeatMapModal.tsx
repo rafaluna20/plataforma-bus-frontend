@@ -1285,6 +1285,7 @@ export default function SeatMapModal({
     setCurrentUser(getCurrentUser());
   }, []);
   const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"].includes(currentUser.role);
+  const isAdminOnly = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
 
   if (!open) return null;
 
@@ -1434,6 +1435,18 @@ export default function SeatMapModal({
               <Package className="w-4 h-4 flex-shrink-0" />
               <span>Encomiendas</span>
             </button>
+            {/* ── Botón Vendedores (solo ADMIN/SUPER_ADMIN) ── */}
+            {isAdminOnly && (
+              <button
+                onClick={() => setSidebarMode("vendedores")}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full"
+                style={sidebarMode === "vendedores"
+                  ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
+                  : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+                <Users className="w-4 h-4 flex-shrink-0" />
+                <span>Vendedores</span>
+              </button>
+            )}
           </div>
 
           <div className="flex-1 p-3 overflow-y-auto">
@@ -1461,6 +1474,53 @@ export default function SeatMapModal({
                     S/ {price > 0 ? price.toFixed(2) : "—"}
                   </p>
                 </div>
+
+                {/* ── Mini resumen de vendedores (solo ADMIN/SUPER_ADMIN) ── */}
+                {isAdminOnly && (() => {
+                  const sellerMap = new Map<string, { name: string; tickets: number; parcelsCount: number }>();
+                  passengers.forEach(p => {
+                    const key = p.seller?.id ?? "__sin_vendedor__";
+                    if (!sellerMap.has(key)) sellerMap.set(key, { name: p.seller?.name ?? "Sin vendedor", tickets: 0, parcelsCount: 0 });
+                    sellerMap.get(key)!.tickets++;
+                  });
+                  parcels.forEach(p => {
+                    const key = (p as any).seller?.id ?? "__sin_vendedor__";
+                    if (!sellerMap.has(key)) sellerMap.set(key, { name: (p as any).seller?.name ?? "Sin vendedor", tickets: 0, parcelsCount: 0 });
+                    sellerMap.get(key)!.parcelsCount++;
+                  });
+                  const stats = Array.from(sellerMap.values()).sort((a, b) => (b.tickets + b.parcelsCount) - (a.tickets + a.parcelsCount));
+                  if (stats.length === 0) return null;
+                  return (
+                    <div className="mt-3 pt-3 border-t border-white/8">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Vendedores</p>
+                        <button
+                          onClick={() => setSidebarMode("vendedores")}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                          style={{ background: `${primaryColor}20`, color: primaryColor }}>
+                          Ver detalle
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {stats.map((s, i) => (
+                          <div key={i} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
+                            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
+                            <div className="w-5 h-5 rounded-full flex-shrink-0 flex items-center justify-center text-[8px] font-extrabold text-white"
+                              style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                              {s.name !== "Sin vendedor" ? s.name.charAt(0).toUpperCase() : "?"}
+                            </div>
+                            <p className="text-[10px] text-white font-semibold flex-1 truncate">{s.name}</p>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-[9px] font-bold" style={{ color: primaryColor }}>🎫{s.tickets}</span>
+                              <span className="text-[9px] text-slate-600">·</span>
+                              <span className="text-[9px] font-bold text-amber-400">📦{s.parcelsCount}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
