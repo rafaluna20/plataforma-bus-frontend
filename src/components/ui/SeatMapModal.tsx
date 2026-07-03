@@ -6,7 +6,7 @@ import {
   Banknote, CreditCard, ArrowRight, Pencil, Package, TicketCheck, Save, RotateCcw,
   Users, RefreshCw, MapPin, Printer
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
+import { authFetch, getCurrentUser } from "@/lib/auth";
 import { API_URL, calcTripPrice } from "@/lib/config";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
@@ -35,6 +35,7 @@ type ManifestParcel = {
   createdAt: string;
   startWaypoint: { station: { name: string } };
   endWaypoint: { station: { name: string } };
+  seller?: { id: string; name: string; email: string; role: string } | null;
 };
 
 type SeatMapModalProps = {
@@ -773,6 +774,9 @@ type ManifestPassenger = {
   destination: string;
   paymentStatus: string;
   paymentMethod: string;
+  price?: number;
+  createdAt?: string;
+  seller?: { id: string; name: string; email: string; role: string } | null;
 };
 
 // ─── Modal de venta ───────────────────────────────────────────────────────────
@@ -1063,7 +1067,7 @@ export default function SeatMapModal({
   const [selectedSeat, setSelectedSeat] = useState<string>("");
   const [selectedSeatFloor, setSelectedSeatFloor] = useState<0 | 1 | 2>(0);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
-  const [sidebarMode, setSidebarMode] = useState<"pasajes" | "encomiendas" | "pasajeros">("pasajes");
+  const [sidebarMode, setSidebarMode] = useState<"pasajes" | "encomiendas" | "pasajeros" | "vendedores">("pasajes");
   const [editMode, setEditMode] = useState(false);
   const [seatLabels, setSeatLabels] = useState<Record<string, string>>(defaultLabels);
 
@@ -1207,7 +1211,7 @@ export default function SeatMapModal({
 
   // Cargar encomiendas cuando se activa esa pestaña
   useEffect(() => {
-    if (sidebarMode === "encomiendas" && open) {
+    if ((sidebarMode === "encomiendas" || sidebarMode === "vendedores") && open) {
       loadParcels();
     }
   }, [sidebarMode, open, loadParcels]);
@@ -1274,6 +1278,10 @@ export default function SeatMapModal({
     const raw = Array.isArray(seatTemplate) ? seatTemplate : (seatTemplate.seats ?? []);
     return raw.filter((s: any) => s.floor === 2 && s.active !== false).length;
   }, [seatTemplate]);
+
+  // Determinar rol administrativo para mostrar pestaña de vendedores
+  const currentUser = useMemo(() => getCurrentUser(), []);
+  const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
 
   if (!open) return null;
 
@@ -1344,37 +1352,50 @@ export default function SeatMapModal({
         </div>
       </div>
 
-      {/* ── TAB BAR MÓVIL (reemplaza al sidebar en pantallas < lg) ──────────── */}
-      <div className="lg:hidden flex-shrink-0 grid grid-cols-3 gap-1.5 px-3 py-2 border-b border-white/8"
-        style={{ background: "#080d1a" }}>
+      <div className="lg:hidden flex-shrink-0 grid gap-1.5 px-3 py-2 border-b border-white/8"
+        style={{
+          background: "#080d1a",
+          gridTemplateColumns: isAdminOrSuper ? "repeat(4, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))"
+        }}>
+      <button
+        onClick={() => setSidebarMode("pasajes")}
+        className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+        style={sidebarMode === "pasajes"
+          ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
+          : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+        <TicketCheck className="w-4 h-4" />
+        <span>Venta</span>
+      </button>
+      <button
+        onClick={() => setSidebarMode("pasajeros")}
+        className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+        style={sidebarMode === "pasajeros"
+          ? { background: "#6366f125", color: "#818cf8", border: "1px solid #6366f150" }
+          : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+        <Users className="w-4 h-4" />
+        <span>Pasajeros ({occupied.length})</span>
+      </button>
+      <button
+        onClick={() => setSidebarMode("encomiendas")}
+        className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
+        style={sidebarMode === "encomiendas"
+          ? { background: "#f59e0b25", color: "#f59e0b", border: "1px solid #f59e0b50" }
+          : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+        <Package className="w-4 h-4" />
+        <span>Encomiendas</span>
+      </button>
+      {isAdminOrSuper && (
         <button
-          onClick={() => setSidebarMode("pasajes")}
+          onClick={() => setSidebarMode("vendedores")}
           className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
-          style={sidebarMode === "pasajes"
+          style={sidebarMode === "vendedores"
             ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
             : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
-          <TicketCheck className="w-4 h-4" />
-          <span>Venta</span>
-        </button>
-        <button
-          onClick={() => setSidebarMode("pasajeros")}
-          className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
-          style={sidebarMode === "pasajeros"
-            ? { background: "#6366f125", color: "#818cf8", border: "1px solid #6366f150" }
-            : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
           <Users className="w-4 h-4" />
-          <span>Pasajeros ({occupied.length})</span>
+          <span>Vendedores</span>
         </button>
-        <button
-          onClick={() => setSidebarMode("encomiendas")}
-          className="flex flex-col items-center justify-center gap-1 py-2 rounded-xl text-[10px] font-bold transition-all"
-          style={sidebarMode === "encomiendas"
-            ? { background: "#f59e0b25", color: "#f59e0b", border: "1px solid #f59e0b50" }
-            : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
-          <Package className="w-4 h-4" />
-          <span>Encomiendas</span>
-        </button>
-      </div>
+      )}
+    </div>
 
       {/* ─── CUERPO ──────────────────────────────────────────────────────────── */}
       <div className="flex-1 flex overflow-hidden">
@@ -1660,6 +1681,131 @@ export default function SeatMapModal({
                 )}
               </div>
             )}
+
+            {/* ── Modo: Vendedores ── */}
+            {sidebarMode === "vendedores" && (() => {
+              type SellerStat = {
+                id: string;
+                name: string;
+                email: string;
+                role: string;
+                tickets: number;
+                ticketTotal: number;
+                parcelsCount: number;
+                parcelsTotal: number;
+              };
+              const sellerMap = new Map<string, SellerStat>();
+
+              passengers.forEach(p => {
+                const key = p.seller?.id ?? "__sin_vendedor__";
+                if (!sellerMap.has(key)) {
+                  sellerMap.set(key, {
+                    id: p.seller?.id ?? "",
+                    name: p.seller?.name ?? "Sin vendedor",
+                    email: p.seller?.email ?? "",
+                    role: p.seller?.role ?? "",
+                    tickets: 0,
+                    ticketTotal: 0,
+                    parcelsCount: 0,
+                    parcelsTotal: 0
+                  });
+                }
+                const s = sellerMap.get(key)!;
+                s.tickets++;
+                s.ticketTotal += Number(p.price ?? 0);
+              });
+
+              parcels.forEach(p => {
+                const key = (p as any).seller?.id ?? "__sin_vendedor__";
+                if (!sellerMap.has(key)) {
+                  sellerMap.set(key, {
+                    id: (p as any).seller?.id ?? "",
+                    name: (p as any).seller?.name ?? "Sin vendedor",
+                    email: (p as any).seller?.email ?? "",
+                    role: (p as any).seller?.role ?? "",
+                    tickets: 0,
+                    ticketTotal: 0,
+                    parcelsCount: 0,
+                    parcelsTotal: 0
+                  });
+                }
+                const s = sellerMap.get(key)!;
+                s.parcelsCount++;
+                s.parcelsTotal += Number(p.totalPrice ?? 0);
+              });
+
+              const stats = Array.from(sellerMap.values()).sort(
+                (a, b) => (b.tickets + b.parcelsCount) - (a.tickets + a.parcelsCount)
+              );
+
+              return (
+                <div className="space-y-3 flex flex-col h-full">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Resumen Ventas</p>
+                    <span className="text-[10px] text-slate-400">Total: {stats.length}</span>
+                  </div>
+
+                  {(loadingPassengers || loadingParcels) ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+                    </div>
+                  ) : stats.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-white/5 rounded-xl">
+                      <Users className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                      <p className="text-xs text-slate-500">Sin datos de ventas</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
+                      {stats.map((s, i) => {
+                        const initials = s.name !== "Sin vendedor"
+                          ? s.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+                          : "?";
+                        const grandTotal = s.ticketTotal + s.parcelsTotal;
+                        return (
+                          <div
+                            key={s.id || i}
+                            className="rounded-xl p-2.5 border border-white/5 flex flex-col gap-2"
+                            style={{ background: "rgba(255,255,255,0.02)" }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                                {initials}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1">
+                                  <p className="text-white text-xs font-bold truncate">{s.name}</p>
+                                  <span className="text-[10px] font-extrabold text-indigo-400" style={{ color: primaryColor }}>
+                                    #{i + 1}
+                                  </span>
+                                </div>
+                                <p className="text-[9px] text-slate-500 truncate">{s.email || "Venta directa / Agencia"}</p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-1 bg-black/20 p-1.5 rounded-lg">
+                              <div className="text-center border-r border-white/5">
+                                <p className="text-[8px] text-slate-500">🎫 Pasajes</p>
+                                <p className="text-xs font-bold text-white mt-0.5">{s.tickets} <span className="text-[9px] font-normal text-slate-400">(S/{s.ticketTotal.toFixed(0)})</span></p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-[8px] text-slate-500">📦 Encom.</p>
+                                <p className="text-xs font-bold text-white mt-0.5">{s.parcelsCount} <span className="text-[9px] font-normal text-slate-400">(S/{s.parcelsTotal.toFixed(0)})</span></p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] pt-1 border-t border-white/5 font-semibold text-slate-300">
+                              <span>Recaudado total:</span>
+                              <span className="font-extrabold text-white">S/ {grandTotal.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
 
