@@ -566,7 +566,7 @@ export default function EmpresaAdminViajesPage() {
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-slate-900/70 border border-white/5 rounded-2xl overflow-hidden animate-pulse">
               <div className="flex items-start gap-3 p-3 pb-2">
-                <div className="w-16 h-16 rounded-xl bg-white/5 flex-shrink-0" />
+                <div className="w-[83px] h-16 rounded-xl bg-white/5 flex-shrink-0" />
                 <div className="flex-1 space-y-2 pt-1">
                   <div className="h-4 bg-white/5 rounded w-3/4" />
                   <div className="h-3 bg-white/5 rounded w-1/2" />
@@ -620,7 +620,7 @@ export default function EmpresaAdminViajesPage() {
                 <div className="flex items-start gap-3 p-3 pb-2">
 
                   {/* Vehicle photo / icon */}
-                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-slate-800 border border-white/8 flex items-center justify-center">
+                  <div className="flex-shrink-0 w-[83px] h-16 rounded-xl overflow-hidden bg-slate-800 border border-white/8 flex items-center justify-center">
                     {vImg ? (
                       <img
                         src={vImg}
