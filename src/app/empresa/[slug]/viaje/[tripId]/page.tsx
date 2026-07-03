@@ -372,7 +372,7 @@ export default function EmpresaViajeDetailPage() {
     ];
 
     const isAdminOrSellerOrDriver = currentUser && ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER", "DRIVER"].includes(currentUser.role);
-    const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
+    const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"].includes(currentUser.role);
 
     if (isAdminOrSellerOrDriver) {
       list.push({ id: "pasajeros" as const, label: `Pasajeros (${occupiedSeats.length})` });

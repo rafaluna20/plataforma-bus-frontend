@@ -1284,7 +1284,7 @@ export default function SeatMapModal({
   useEffect(() => {
     setCurrentUser(getCurrentUser());
   }, []);
-  const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
+  const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN", "AGENCY_SELLER"].includes(currentUser.role);
 
   if (!open) return null;
 
