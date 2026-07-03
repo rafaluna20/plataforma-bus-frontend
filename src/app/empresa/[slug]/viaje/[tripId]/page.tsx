@@ -82,6 +82,13 @@ type CompanyPublic = {
   ruc: string | null;
 };
 
+type Seller = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
 type Passenger = {
   id: string;
   seatId: string;
@@ -91,6 +98,9 @@ type Passenger = {
   destination: string;
   paymentStatus: string;
   paymentMethod: string;
+  price?: number;
+  createdAt?: string;
+  seller?: Seller | null;
 };
 
 type Parcel = {
@@ -107,6 +117,7 @@ type Parcel = {
   createdAt: string;
   startWaypoint: { station: { name: string } };
   endWaypoint:   { station: { name: string } };
+  seller?: Seller | null;
 };
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -149,7 +160,7 @@ export default function EmpresaViajeDetailPage() {
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState("");
-  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "mapa">("descripcion");
+  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa">("descripcion");
   const [startWaypointId, setStartWaypointId] = useState("");
   const [endWaypointId, setEndWaypointId]     = useState("");
   const [seatModalOpen, setSeatModalOpen]     = useState(false);
@@ -354,7 +365,7 @@ export default function EmpresaViajeDetailPage() {
   // ─── Pestañas dinámicas (DEBE estar antes de los early returns) ───────────────
   const waypointsLength = trip?.route?.waypoints?.length || 0;
   const tabs = useMemo(() => {
-    const list: Array<{ id: "descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "mapa"; label: string }> = [
+    const list: Array<{ id: "descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa"; label: string }> = [
       { id: "descripcion",  label: "Descripción" },
       { id: "paradas",      label: `Paradas ${waypointsLength}` },
       { id: "vehiculo",     label: "Vehículo" },
@@ -368,6 +379,7 @@ export default function EmpresaViajeDetailPage() {
     }
     if (isAdminOrSuper) {
       list.push({ id: "encomiendas" as const, label: `Encomiendas (${parcels.length})` });
+      list.push({ id: "vendedores" as const, label: "Vendedores" });
     }
 
     list.push({ id: "mapa" as const, label: "Mapa" });
@@ -1064,6 +1076,154 @@ export default function EmpresaViajeDetailPage() {
                 )}
               </div>
             )}
+
+            {/* ─── Tab: Vendedores ─────────────────────────────────────────── */}
+            {activeTab === "vendedores" && (() => {
+              // Agrupa pasajes por vendedor
+              type SellerStat = {
+                seller: Seller | null;
+                tickets: number;
+                ticketTotal: number;
+                parcelsCount: number;
+                parcelsTotal: number;
+              };
+              const sellerMap = new Map<string, SellerStat>();
+
+              // Agrupamos pasajes
+              passengers.forEach(p => {
+                const key   = p.seller?.id ?? "__sin_vendedor__";
+                const label = p.seller ?? null;
+                if (!sellerMap.has(key)) {
+                  sellerMap.set(key, { seller: label, tickets: 0, ticketTotal: 0, parcelsCount: 0, parcelsTotal: 0 });
+                }
+                const s = sellerMap.get(key)!;
+                s.tickets++;
+                s.ticketTotal += Number(p.price ?? 0);
+              });
+
+              // Agrupamos encomiendas
+              parcels.forEach(p => {
+                const key   = (p as any).seller?.id ?? "__sin_vendedor__";
+                const label = (p as any).seller ?? null;
+                if (!sellerMap.has(key)) {
+                  sellerMap.set(key, { seller: label, tickets: 0, ticketTotal: 0, parcelsCount: 0, parcelsTotal: 0 });
+                }
+                const s = sellerMap.get(key)!;
+                s.parcelsCount++;
+                s.parcelsTotal += Number(p.totalPrice ?? 0);
+              });
+
+              const stats = Array.from(sellerMap.values()).sort(
+                (a, b) => (b.tickets + b.parcelsCount) - (a.tickets + a.parcelsCount)
+              );
+
+              const grandTickets = stats.reduce((a, s) => a + s.tickets, 0);
+              const grandTicketTotal = stats.reduce((a, s) => a + s.ticketTotal, 0);
+              const grandParcels = stats.reduce((a, s) => a + s.parcelsCount, 0);
+              const grandParcelsTotal = stats.reduce((a, s) => a + s.parcelsTotal, 0);
+
+              return (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                      <Users className="w-5 h-5" style={{ color: primaryColor }} />
+                      Resumen por Vendedor
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      {stats.length} vendedor{stats.length !== 1 ? "es" : ""}
+                    </span>
+                  </div>
+
+                  {/* Totales globales */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: "Pasajes",   value: grandTickets,                    color: primaryColor },
+                      { label: "S/ Pasajes", value: `S/ ${grandTicketTotal.toFixed(2)}`, color: primaryColor },
+                      { label: "Encomiendas", value: grandParcels,                  color: secondaryColor },
+                      { label: "S/ Encom.",  value: `S/ ${grandParcelsTotal.toFixed(2)}`, color: secondaryColor },
+                    ].map(s => (
+                      <div key={s.label} className="bg-slate-900/60 border border-white/5 rounded-xl p-3 text-center">
+                        <p className="text-xs text-slate-500 mb-1">{s.label}</p>
+                        <p className="text-lg font-extrabold" style={{ color: s.color }}>{s.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tarjetas por vendedor */}
+                  {stats.length === 0 ? (
+                    <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-10 text-center">
+                      <Users className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                      <p className="text-slate-400">No hay ventas registradas aún</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {stats.map((s, i) => {
+                        const initials = s.seller?.name
+                          ? s.seller.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+                          : "?";
+                        const roleBadge: Record<string, string> = {
+                          ADMIN: "Admin", AGENCY_SELLER: "Vendedor",
+                          SUPER_ADMIN: "Super", PASSENGER: "Pasajero",
+                        };
+                        return (
+                          <div key={s.seller?.id ?? i}
+                            className="bg-slate-900/60 border border-white/5 rounded-2xl p-4 flex items-start gap-4">
+
+                            {/* Avatar */}
+                            <div className="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold text-white"
+                              style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                              {initials}
+                            </div>
+
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-white text-sm truncate">
+                                  {s.seller?.name ?? "Sin vendedor asignado"}
+                                </span>
+                                {s.seller?.role && (
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full border"
+                                    style={{ color: primaryColor, borderColor: `${primaryColor}40`, background: `${primaryColor}15` }}>
+                                    {roleBadge[s.seller.role] ?? s.seller.role}
+                                  </span>
+                                )}
+                              </div>
+                              {s.seller?.email && (
+                                <p className="text-xs text-slate-500 truncate mt-0.5">{s.seller.email}</p>
+                              )}
+
+                              {/* Métricas */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+                                {[
+                                  { label: "Pasajes",   value: s.tickets,                          icon: "🎫" },
+                                  { label: "S/ Pasajes", value: `S/ ${s.ticketTotal.toFixed(2)}`, icon: "💰" },
+                                  { label: "Encomien.", value: s.parcelsCount,                     icon: "📦" },
+                                  { label: "S/ Encom.", value: `S/ ${s.parcelsTotal.toFixed(2)}`,  icon: "💰" },
+                                ].map(m => (
+                                  <div key={m.label} className="bg-slate-800/60 rounded-xl p-2 text-center">
+                                    <p className="text-[10px] text-slate-500">{m.icon} {m.label}</p>
+                                    <p className="text-sm font-bold text-white mt-0.5">{m.value}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Ranking badge */}
+                            <div className="text-lg font-extrabold flex-shrink-0"
+                              style={{ color: i === 0 ? "#facc15" : i === 1 ? "#94a3b8" : i === 2 ? "#b45309" : "#475569" }}>
+                              #{i + 1}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <p className="text-xs text-slate-600 text-center pt-1">
+                    Información confidencial — solo visible para administradores de {company.tradeName}
+                  </p>
+                </div>
+              );
+            })()}
 
             {/* ─── Tab: Mapa ──────────────────────────────────────────────── */}
             {activeTab === "mapa" && (
