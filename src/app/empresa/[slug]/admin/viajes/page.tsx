@@ -535,7 +535,23 @@ export default function EmpresaAdminViajesPage() {
       {/* ─── Lista de viajes ─────────────────────────────────────────────────── */}
       {loading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map(i => <div key={i} className="h-20 bg-white/5 rounded-xl animate-pulse" />)}
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-slate-900/70 border border-white/5 rounded-2xl overflow-hidden animate-pulse">
+              <div className="flex items-start gap-3 p-3 pb-2">
+                <div className="w-16 h-16 rounded-xl bg-white/5 flex-shrink-0" />
+                <div className="flex-1 space-y-2 pt-1">
+                  <div className="h-4 bg-white/5 rounded w-3/4" />
+                  <div className="h-3 bg-white/5 rounded w-1/2" />
+                  <div className="flex gap-1.5">
+                    <div className="h-4 bg-white/5 rounded-full w-16" />
+                    <div className="h-4 bg-white/5 rounded-full w-14" />
+                    <div className="h-4 bg-white/5 rounded-full w-10" />
+                  </div>
+                </div>
+              </div>
+              <div className="h-10 bg-white/3 border-t border-white/5" />
+            </div>
+          ))}
         </div>
       ) : filteredTrips.length === 0 ? (
         <div className="flex flex-col items-center gap-4 py-20 text-center">
@@ -546,86 +562,151 @@ export default function EmpresaAdminViajesPage() {
           <p className="text-slate-600 text-sm">Haz clic en "Programar Viaje" para comenzar</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredTrips.map(trip => {
             const wps  = trip.route.waypoints || [];
             const orig = wps[0]?.station?.name || "—";
             const dest = wps[wps.length - 1]?.station?.name || "—";
             const dep  = new Date(trip.departureTime);
             const st   = statusConfig[trip.status] || statusConfig.SCHEDULED;
-            const canEdit = EDITABLE_STATUSES.includes(trip.status) && isAdmin;
+            const canEdit   = EDITABLE_STATUSES.includes(trip.status) && isAdmin;
             const canCancel = ["SCHEDULED", "BOARDING"].includes(trip.status) && isAdmin;
+            const noDriver  = !trip.driver && ["SCHEDULED", "BOARDING", "IN_TRANSIT"].includes(trip.status);
+
+            // Color accent by status
+            const accentColor =
+              trip.status === "BOARDING"   ? "#f59e0b" :
+              trip.status === "IN_TRANSIT" ? "#6366f1" :
+              trip.status === "COMPLETED"  ? "#10b981" :
+              trip.status === "CANCELLED"  ? "#ef4444" : "#475569";
+
+            // Vehicle type icon label
+            const vtLabel = vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType;
 
             return (
               <div key={trip.id}
-                className="flex items-center gap-4 p-4 bg-slate-900/60 border border-white/5 rounded-xl hover:border-white/10 transition-all">
-                <div className="p-2 rounded-lg flex-shrink-0 bg-indigo-500/10">
-                  <Bus className="w-4 h-4 text-indigo-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-sm font-semibold text-white">
-                    <span className="truncate">{orig}</span>
-                    <ArrowRight className="w-3 h-3 flex-shrink-0 text-slate-500" />
-                    <span className="truncate">{dest}</span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {vehicleTypeLabel[trip.vehicle.vehicleType] || trip.vehicle.vehicleType} · {trip.vehicle.plateNumber} · {trip.vehicle.capacity} asientos
-                  </p>
-                  {isAdmin && (
-                    trip.driver ? (
-                      <p className="flex items-center gap-1 text-xs text-emerald-400/90 mt-1">
-                        <UserRound className="w-3 h-3 flex-shrink-0" /> {trip.driver.name}
-                      </p>
+                className="bg-slate-900/70 border border-white/6 rounded-2xl overflow-hidden hover:border-white/12 transition-all"
+                style={{ borderLeft: `3px solid ${accentColor}` }}>
+
+                {/* ── Top: Photo + Route + Date + Status ──────────────────── */}
+                <div className="flex items-start gap-3 p-3 pb-2">
+
+                  {/* Vehicle photo / icon */}
+                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden bg-slate-800 border border-white/8 flex items-center justify-center">
+                    {(trip.vehicle as any).photoUrl ? (
+                      <img
+                        src={(trip.vehicle as any).photoUrl}
+                        alt={trip.vehicle.plateNumber}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     ) : (
-                      ["SCHEDULED", "BOARDING", "IN_TRANSIT"].includes(trip.status) && (
-                        <p className="flex items-center gap-1 text-xs text-amber-400/90 mt-1">
-                          <UserRound className="w-3 h-3 flex-shrink-0" /> Sin conductor asignado
-                        </p>
-                      )
-                    )
-                  )}
+                      <div className="flex flex-col items-center gap-1">
+                        <Bus className="w-7 h-7 text-slate-500" />
+                        <span className="text-[9px] text-slate-600 font-bold leading-none">
+                          {trip.vehicle.vehicleType === "BUS_2P" ? "2P" :
+                           trip.vehicle.vehicleType === "BUS_1P" ? "1P" :
+                           trip.vehicle.vehicleType === "MINIVAN" ? "MV" : "AU"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Route + meta */}
+                  <div className="flex-1 min-w-0">
+                    {/* Origin → Destination */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-sm font-bold text-white leading-tight truncate max-w-[110px] sm:max-w-none">
+                        {orig}
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                      <span className="text-sm font-bold text-white leading-tight truncate max-w-[110px] sm:max-w-none">
+                        {dest}
+                      </span>
+                    </div>
+
+                    {/* Date */}
+                    <p className="text-xs font-semibold mt-0.5" style={{ color: accentColor }}>
+                      {dep.toLocaleDateString("es-PE", { weekday: "short", day: "2-digit", month: "short" })}
+                      {" · "}
+                      {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+
+                    {/* Chips row */}
+                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/8">
+                        <Bus className="w-3 h-3" /> {vtLabel}
+                      </span>
+                      <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/8">
+                        {trip.vehicle.plateNumber}
+                      </span>
+                      <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/8">
+                        🪑 {trip.vehicle.capacity}
+                      </span>
+                      <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full border ${st.cls}`}>
+                        {st.label}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-white">
-                    {dep.toLocaleDateString("es-PE", { day: "2-digit", month: "short" })} {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                  <span className={`text-xs px-2 py-0.5 rounded-full border ${st.cls}`}>
-                    {st.label}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {/* MEJORA 4 — Duplicar */}
+
+                {/* ── Driver row ──────────────────────────────────────────── */}
+                {isAdmin && (
+                  <div className={`mx-3 mb-2 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-medium ${
+                    noDriver
+                      ? "bg-amber-500/8 border border-amber-500/20 text-amber-400"
+                      : "bg-emerald-500/8 border border-emerald-500/15 text-emerald-400"
+                  }`}>
+                    <UserRound className="w-3.5 h-3.5 flex-shrink-0" />
+                    {trip.driver ? trip.driver.name : "Sin conductor asignado"}
+                    {noDriver && (
+                      <span className="ml-auto text-[10px] text-amber-500/70 font-normal">⚠ Acción requerida</span>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Action bar ──────────────────────────────────────────── */}
+                <div className="flex items-center border-t border-white/5 divide-x divide-white/5">
+
+                  {/* Vender — always visible, full width on the left */}
+                  <Link
+                    href={`/empresa/${slugStr}/admin/venta?tripId=${trip.id}`}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-indigo-400 hover:bg-indigo-500/10 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                    </svg>
+                    Vender
+                  </Link>
+
+                  {/* Duplicar */}
                   {isAdmin && (
                     <button
                       onClick={() => handleOpenDuplicate(trip)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
-                      title="Duplicar viaje con nueva fecha">
-                      <Copy className="w-4 h-4" />
+                      className="flex items-center justify-center gap-1 px-3 py-2.5 text-[11px] font-medium text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/8 transition-colors">
+                      <Copy className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Clonar</span>
                     </button>
                   )}
-                  {/* MEJORA 3 — Editar también en BOARDING */}
+
+                  {/* Editar */}
                   {canEdit && (
                     <button
                       onClick={() => handleOpenEdit(trip)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 transition-colors"
-                      title="Reprogramar viaje">
-                      <Edit2 className="w-4 h-4" />
+                      className="flex items-center justify-center gap-1 px-3 py-2.5 text-[11px] font-medium text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/8 transition-colors">
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Editar</span>
                     </button>
                   )}
-                  {/* MEJORA 1 — Cancelar */}
+
+                  {/* Cancelar */}
                   {canCancel && (
                     <button
                       onClick={() => handleOpenCancel(trip)}
-                      className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                      title="Cancelar viaje">
-                      <XCircle className="w-4 h-4" />
+                      className="flex items-center justify-center gap-1 px-3 py-2.5 text-[11px] font-medium text-slate-400 hover:text-red-400 hover:bg-red-500/8 transition-colors">
+                      <XCircle className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Cancelar</span>
                     </button>
                   )}
-                  <Link
-                    href={`/empresa/${slugStr}/admin/venta?tripId=${trip.id}`}
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all bg-indigo-500/15 text-indigo-400 hover:bg-indigo-500/25">
-                    Vender
-                  </Link>
                 </div>
               </div>
             );
