@@ -1280,7 +1280,10 @@ export default function SeatMapModal({
   }, [seatTemplate]);
 
   // Determinar rol administrativo para mostrar pestaña de vendedores
-  const currentUser = useMemo(() => getCurrentUser(), []);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  useEffect(() => {
+    setCurrentUser(getCurrentUser());
+  }, []);
   const isAdminOrSuper = currentUser && ["ADMIN", "SUPER_ADMIN"].includes(currentUser.role);
 
   if (!open) return null;
