@@ -252,35 +252,67 @@ const SeatButton = memo(function SeatButton({
   );
 });
 
-// ─── Fila de ruedas ──────────────────────────────────────────────────────────
-const WheelRow = memo(function WheelRow() {
+// ─── Estilos compartidos de carrocería (mismo lenguaje visual que AutoSaleMap) ─
+const GLASS_TINT = "linear-gradient(135deg, rgba(59,110,180,0.55), rgba(22,42,74,0.8))";
+const WINDOW_STRIP_BG =
+  "repeating-linear-gradient(90deg, rgba(30,41,59,0.45) 0px, rgba(30,41,59,0.45) 2px, rgba(226,232,240,0.18) 2px, rgba(226,232,240,0.18) 20px)";
+
+/** Banda de ruedas superpuesta al borde de la carrocería (no flotando fuera de ella). */
+const WheelBand = memo(function WheelBand({ position, compact = false }: { position: "top" | "bottom"; compact?: boolean }) {
   return (
-    <div className="flex self-stretch justify-between items-center gap-2" style={{ paddingLeft: 58, paddingRight: 58 }}>
+    <div className={`absolute left-0 right-0 flex justify-between ${compact ? "px-6" : "px-9"} pointer-events-none z-10`}
+      style={{ [position]: -13 }}>
       <div className="flex gap-2"><Wheel /><Wheel /></div>
       <div className="flex gap-2"><Wheel /><Wheel /></div>
     </div>
   );
 });
 
-const DriverCol = memo(function DriverCol() {
+/** Franja decorativa de ventanas a lo largo del borde interior de la carrocería. */
+const WindowStrip = memo(function WindowStrip({ edge }: { edge: "top" | "bottom" }) {
   return (
-    <div className="flex flex-col items-center justify-center border-r-2 border-slate-400/40 flex-shrink-0"
-      style={{ background: "linear-gradient(90deg,#9ba8c0,#b0bbd0)", minWidth: 75, padding: "16px 10px" }}>
-      <SteeringWheel />
-      <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wider mt-2"
-        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
+    <div className="absolute left-3 right-3 h-[7px] rounded-full opacity-70 pointer-events-none"
+      style={{ [edge]: 6, background: WINDOW_STRIP_BG }} />
+  );
+});
+
+type ColVariant = "nose-round" | "nose-sharp" | "tail-square" | "tail-cut";
+
+const DriverCol = memo(function DriverCol({ variant = "nose-round" }: { variant?: ColVariant }) {
+  const sharp = variant === "nose-sharp";
+  return (
+    <div className="relative flex flex-col items-center justify-center border-r-2 border-slate-400/40 flex-shrink-0 overflow-hidden"
+      style={{
+        background: "linear-gradient(90deg,#8f9cb8,#aab5d0)",
+        minWidth: 75, padding: "16px 10px",
+        borderTopLeftRadius: sharp ? 10 : 26,
+        borderBottomLeftRadius: sharp ? 10 : 26,
+      }}>
+      {/* Parabrisas / vidrio delantero */}
+      <div className="absolute inset-1.5 rounded-lg" style={{ background: GLASS_TINT, opacity: 0.9 }} />
+      <div className="relative"><SteeringWheel /></div>
+      <span className="relative text-[8px] font-bold text-slate-100/90 uppercase tracking-wider mt-2"
+        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
         Conductor
       </span>
     </div>
   );
 });
 
-const PostCol = memo(function PostCol() {
+const PostCol = memo(function PostCol({ variant = "tail-square" }: { variant?: ColVariant }) {
+  const cut = variant === "tail-cut";
   return (
-    <div className="flex flex-col items-center justify-center border-l-2 border-slate-400/40 flex-shrink-0"
-      style={{ background: "linear-gradient(90deg,#b0bbd0,#9ba8c0)", minWidth: 34, padding: "16px 6px" }}>
-      <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wider"
-        style={{ writingMode: "vertical-rl" }}>Post.</span>
+    <div className="relative flex flex-col items-center justify-center border-l-2 border-slate-400/40 flex-shrink-0 overflow-hidden"
+      style={{
+        background: "linear-gradient(90deg,#aab5d0,#8f9cb8)",
+        minWidth: cut ? 30 : 34, padding: "16px 6px",
+        borderTopRightRadius: cut ? 8 : 18,
+        borderBottomRightRadius: cut ? 8 : 18,
+        clipPath: cut ? "polygon(0 0, 100% 12%, 100% 88%, 0 100%)" : undefined,
+      }}>
+      <div className="absolute inset-1 rounded-md" style={{ background: GLASS_TINT, opacity: 0.75 }} />
+      <span className="relative text-[8px] font-bold text-slate-100/90 uppercase tracking-wider"
+        style={{ writingMode: "vertical-rl", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>Post.</span>
     </div>
   );
 });
@@ -549,36 +581,40 @@ const BusMap = memo(function BusMap({
       const maxCol = Math.max(...templateSeats.map((s: any) => s.col));
       return (
         <div className="flex flex-col items-center gap-2">
-          <WheelRow />
-          <div className="rounded-3xl border-2 border-slate-400/50 overflow-hidden"
-            style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
-            <div className="flex items-stretch">
-              <DriverCol />
-              <div className="p-4 flex flex-col gap-2">
-                {Array.from({ length: maxRow }, (_, ri) => {
-                  const rowSeats = templateSeats.filter((s: any) => s.row === ri + 1);
-                  return (
-                    <div key={ri}>
-                      {ri === 1 && (
-                        <div className="h-4 flex items-center mb-2">
-                          <div className="w-full h-px opacity-20 bg-slate-500" />
+          <div className="relative">
+            <div className="relative rounded-2xl border-2 border-slate-400/50 overflow-hidden"
+              style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+              <WindowStrip edge="top" />
+              <div className="flex items-stretch">
+                <DriverCol variant="nose-sharp" />
+                <div className="p-4 flex flex-col gap-2">
+                  {Array.from({ length: maxRow }, (_, ri) => {
+                    const rowSeats = templateSeats.filter((s: any) => s.row === ri + 1);
+                    return (
+                      <div key={ri}>
+                        {ri === 1 && (
+                          <div className="h-4 flex items-center mb-2">
+                            <div className="w-full h-px opacity-20 bg-slate-500" />
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          {Array.from({ length: maxCol }, (_, ci) => {
+                            const seat = rowSeats.find((s: any) => s.col === ci + 1);
+                            if (!seat) return <div key={ci} style={{ width: Math.round(SZ * 1.15), height: SZ }} className="flex-shrink-0" />;
+                            return renderSeat(seat.id, seatLabels[seat.id] ?? seat.label ?? seat.id.replace(/\D/g, ""));
+                          })}
                         </div>
-                      )}
-                      <div className="flex gap-2">
-                        {Array.from({ length: maxCol }, (_, ci) => {
-                          const seat = rowSeats.find((s: any) => s.col === ci + 1);
-                          if (!seat) return <div key={ci} style={{ width: Math.round(SZ * 1.15), height: SZ }} className="flex-shrink-0" />;
-                          return renderSeat(seat.id, seatLabels[seat.id] ?? seat.label ?? seat.id.replace(/\D/g, ""));
-                        })}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                <PostCol variant="tail-cut" />
               </div>
-              <PostCol />
+              <WindowStrip edge="bottom" />
             </div>
+            <WheelBand position="top" />
+            <WheelBand position="bottom" />
           </div>
-          <WheelRow />
         </div>
       );
     }
@@ -591,27 +627,31 @@ const BusMap = memo(function BusMap({
     ];
     return (
       <div className="flex flex-col items-center gap-2">
-        <WheelRow />
-        <div className="rounded-3xl border-2 border-slate-400/50 overflow-hidden"
-          style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
-          <div className="flex items-stretch">
-            <DriverCol />
-            <div className="p-4 flex flex-col gap-2">
-              {rows.map((row, ri) => (
-                <div key={ri}>
-                  {ri === 1 && (
-                    <div className="h-4 flex items-center mb-2">
-                      <div className="w-full h-px opacity-20 bg-slate-500" />
-                    </div>
-                  )}
-                  <div className="flex gap-2">{row.map(id => renderSeat(id))}</div>
-                </div>
-              ))}
+        <div className="relative">
+          <div className="relative rounded-2xl border-2 border-slate-400/50 overflow-hidden"
+            style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+            <WindowStrip edge="top" />
+            <div className="flex items-stretch">
+              <DriverCol variant="nose-sharp" />
+              <div className="p-4 flex flex-col gap-2">
+                {rows.map((row, ri) => (
+                  <div key={ri}>
+                    {ri === 1 && (
+                      <div className="h-4 flex items-center mb-2">
+                        <div className="w-full h-px opacity-20 bg-slate-500" />
+                      </div>
+                    )}
+                    <div className="flex gap-2">{row.map(id => renderSeat(id))}</div>
+                  </div>
+                ))}
+              </div>
+              <PostCol variant="tail-cut" />
             </div>
-            <PostCol />
+            <WindowStrip edge="bottom" />
           </div>
+          <WheelBand position="top" />
+          <WheelBand position="bottom" />
         </div>
-        <WheelRow />
       </div>
     );
   }
@@ -635,26 +675,31 @@ const BusMap = memo(function BusMap({
       );
     }
 
+    const isMinivan = vehicleType === "MINIVAN";
     return (
       <div className="flex flex-col items-center gap-2">
-        <WheelRow />
-        <div className="rounded-3xl border-2 border-slate-400/50 overflow-hidden"
-          style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
-          <div className="flex items-stretch">
-            <DriverCol />
-            <div className="p-4 flex flex-col gap-2">
-              {renderTemplateRow(getRow(1), "A")}
-              {renderTemplateRow(getRow(2), "B")}
-              <div className="h-4 flex items-center">
-                <div className="w-full h-px opacity-20 bg-slate-500" />
+        <div className="relative">
+          <div className={`relative ${isMinivan ? "rounded-2xl" : "rounded-3xl"} border-2 border-slate-400/50 overflow-hidden`}
+            style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+            <WindowStrip edge="top" />
+            <div className="flex items-stretch">
+              <DriverCol variant={isMinivan ? "nose-sharp" : "nose-round"} />
+              <div className="p-4 flex flex-col gap-2">
+                {renderTemplateRow(getRow(1), "A")}
+                {renderTemplateRow(getRow(2), "B")}
+                <div className="h-4 flex items-center">
+                  <div className="w-full h-px opacity-20 bg-slate-500" />
+                </div>
+                {renderTemplateRow(getRow(3), "C")}
+                {renderTemplateRow(getRow(4), "D")}
               </div>
-              {renderTemplateRow(getRow(3), "C")}
-              {renderTemplateRow(getRow(4), "D")}
+              <PostCol variant={isMinivan ? "tail-cut" : "tail-square"} />
             </div>
-            <PostCol />
+            <WindowStrip edge="bottom" />
           </div>
+          <WheelBand position="top" compact={isMinivan} />
+          <WheelBand position="bottom" compact={isMinivan} />
         </div>
-        <WheelRow />
       </div>
     );
   }
@@ -689,26 +734,31 @@ const BusMap = memo(function BusMap({
     );
   }
 
+  const isMinivanFallback = vehicleType === "MINIVAN";
   return (
     <div className="flex flex-col items-center gap-2">
-      <WheelRow />
-      <div className="rounded-3xl border-2 border-slate-400/50 overflow-hidden"
-        style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
-        <div className="flex items-stretch">
-          <DriverCol />
-          <div className="p-4 flex flex-col gap-2">
-            {renderRow(rowA, "A")}
-            {renderRow(rowB, "B")}
-            <div className="h-4 flex items-center">
-              <div className="w-full h-px opacity-20 bg-slate-500" />
+      <div className="relative">
+        <div className={`relative ${isMinivanFallback ? "rounded-2xl" : "rounded-3xl"} border-2 border-slate-400/50 overflow-hidden`}
+          style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+          <WindowStrip edge="top" />
+          <div className="flex items-stretch">
+            <DriverCol variant={isMinivanFallback ? "nose-sharp" : "nose-round"} />
+            <div className="p-4 flex flex-col gap-2">
+              {renderRow(rowA, "A")}
+              {renderRow(rowB, "B")}
+              <div className="h-4 flex items-center">
+                <div className="w-full h-px opacity-20 bg-slate-500" />
+              </div>
+              {renderRow(rowC, "C")}
+              {renderRow(rowD, "D")}
             </div>
-            {renderRow(rowC, "C")}
-            {renderRow(rowD, "D")}
+            <PostCol variant={isMinivanFallback ? "tail-cut" : "tail-square"} />
           </div>
-          <PostCol />
+          <WindowStrip edge="bottom" />
         </div>
+        <WheelBand position="top" compact={isMinivanFallback} />
+        <WheelBand position="bottom" compact={isMinivanFallback} />
       </div>
-      <WheelRow />
     </div>
   );
 });
