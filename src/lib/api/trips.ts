@@ -10,11 +10,19 @@ export function getTripManifest<T = any>(tripId: string) {
   return apiGetPublic<T>(`/api/v1/trips/${tripId}/manifest`, "Error al cargar pasajeros");
 }
 
-export function searchTrips<T = any>(params: { origin?: string; destination?: string; date?: string }) {
+export function searchTrips<T = any>(params: {
+  origin?: string;
+  destination?: string;
+  date?: string;
+  companyId?: string;
+  limit?: number;
+}) {
   const query = new URLSearchParams({
     origin: params.origin || "",
     destination: params.destination || "",
     date: params.date || "",
+    ...(params.companyId ? { companyId: params.companyId } : {}),
+    ...(params.limit ? { limit: String(params.limit) } : {}),
   }).toString();
   return apiGetPublic<T>(`/api/v1/trips/search?${query}`, "Error al buscar viajes");
 }
@@ -31,6 +39,10 @@ export function getManagementTripManifest<T = any>(tripId: string) {
 
 export function getMyDriverTrips<T = any>() {
   return apiGet<T>(`/api/v1/management/trips/my-driver`, "Error al cargar tus viajes");
+}
+
+export function getTripsByCompany<T = any>(companyId: string) {
+  return apiGet<T>(`/api/v1/management/trips/company/${companyId}`, "Error al cargar los viajes de la empresa");
 }
 
 /** Avanza el estado del viaje (SCHEDULED→BOARDING→IN_TRANSIT→COMPLETED). Requiere sesión. */

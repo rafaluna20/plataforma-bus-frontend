@@ -7,9 +7,9 @@ import {
   Bus, Ticket, BarChart3, Clock, Users, ArrowRight,
   RefreshCw, TrendingUp, CheckCircle2, AlertCircle, Activity
 } from "lucide-react";
-import { authFetch, getCurrentUser } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCurrentUser } from "@/lib/auth";
+import { getMyBranding } from "@/lib/api/branding";
+import { getTripsByCompany } from "@/lib/api/trips";
 
 type Trip = {
   id: string;
@@ -59,19 +59,15 @@ export default function AdminDashboardPage() {
       }
 
       // Obtener la empresa del usuario
-      const brandingRes = await authFetch(`${API}/api/v1/branding/me`);
-      if (brandingRes.ok) {
-        const data = await brandingRes.json();
-        if (data.company) {
-          setCompany(data.company);
-          setPrimaryColor(data.company.primaryColor || "#6366f1");
-          setSecondaryColor(data.company.secondaryColor || "#8b5cf6");
-          
-          // Cargar viajes de la empresa
-          const tripsRes = await authFetch(`${API}/api/v1/management/trips/company/${data.company.id}`);
-          const tripsData = await tripsRes.json();
-          setTrips(tripsData.trips || []);
-        }
+      const data = await getMyBranding<any>();
+      if (data.company) {
+        setCompany(data.company);
+        setPrimaryColor(data.company.primaryColor || "#6366f1");
+        setSecondaryColor(data.company.secondaryColor || "#8b5cf6");
+
+        // Cargar viajes de la empresa
+        const tripsData = await getTripsByCompany<any>(data.company.id);
+        setTrips(tripsData.trips || []);
       }
     } catch { }
     finally { setLoading(false); }

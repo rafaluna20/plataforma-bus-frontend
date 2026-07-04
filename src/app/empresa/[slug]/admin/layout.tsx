@@ -8,9 +8,8 @@ import {
   Menu, X, ChevronRight, Home,
   Map, Building2, Truck, Users
 } from "lucide-react";
-import { getCurrentUser, logout, authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCurrentUser, logout } from "@/lib/auth";
+import { getMyBranding } from "@/lib/api/branding";
 
 type CompanyPublic = {
   id: string;
@@ -50,13 +49,14 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
       // 2. Obtener datos de la empresa directamente desde el servidor con el token del admin.
       //    /branding/me ya valida que el usuario está autenticado y devuelve SU empresa.
       //    Esta es la fuente de verdad — no necesitamos validar nada más en el cliente.
-      const meRes = await authFetch(`${API}/api/v1/branding/me`);
-      if (!meRes.ok) {
+      let meData: any;
+      try {
+        meData = await getMyBranding<any>();
+      } catch {
         // Token inválido o usuario sin empresa
         router.push("/login?redirect=/admin");
         return;
       }
-      const meData = await meRes.json();
       const companyData = meData.company;
 
       if (!companyData) {

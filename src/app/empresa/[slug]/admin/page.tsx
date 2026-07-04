@@ -8,8 +8,8 @@ import {
   RefreshCw, TrendingUp, CheckCircle2, AlertCircle, Activity
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanyBySlug } from "@/lib/api/branding";
+import { searchTrips } from "@/lib/api/trips";
 
 type Trip = {
   id: string;
@@ -53,17 +53,14 @@ export default function EmpresaAdminDashboard() {
       if (!user) return;
 
       // Cargar empresa
-      const companyRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      const companyData = await companyRes.json();
-      if (!companyRes.ok) return;
+      const companyData = await getCompanyBySlug<any>(slugStr as string);
       setCompany(companyData.company);
       setPrimaryColor(companyData.company.primaryColor || "#6366f1");
       setSecondaryColor(companyData.company.secondaryColor || "#8b5cf6");
 
       // Cargar viajes usando endpoint público (accesible para todos los roles)
       const companyId = companyData.company.id;
-      const tripsRes = await fetch(`${API}/api/v1/trips/search?companyId=${companyId}&limit=100`);
-      const tripsData = await tripsRes.json();
+      const tripsData = await searchTrips<any>({ companyId, limit: 100 });
       setTrips(tripsData.trips || tripsData.data || []);
     } catch { }
     finally { setLoading(false); }
