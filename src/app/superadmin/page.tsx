@@ -8,9 +8,9 @@ import {
   UserCheck, UserX, Crown, Truck, User, Eye, EyeOff
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getUsers, createDriver, createSeller, createAdmin, changeUserRole, setUserActive, getAdminStats } from "@/lib/api/admin";
+import { getCompanies, createCompany } from "@/lib/api/companies";
+import { getAllStations } from "@/lib/api/routes";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -118,28 +118,24 @@ export default function SuperAdminPanel() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [usersRes, companiesRes, statsRes, stationsRes] = await Promise.all([
-        authFetch(`${API}/api/v1/admin/users?limit=100`),
-        authFetch(`${API}/api/v1/companies`),
-        authFetch(`${API}/api/v1/admin/stats`),
-        authFetch(`${API}/api/v1/routes/stations`),
+      const [usersRes, companiesRes, statsRes, stationsRes] = await Promise.allSettled([
+        getUsers<any>({ limit: 100 }),
+        getCompanies<any>(),
+        getAdminStats<any>(),
+        getAllStations<any>(),
       ]);
 
-      if (usersRes.ok) {
-        const d = await usersRes.json();
-        setUsers(d.data || d.users || []);
+      if (usersRes.status === "fulfilled") {
+        setUsers(usersRes.value.data || usersRes.value.users || []);
       }
-      if (companiesRes.ok) {
-        const d = await companiesRes.json();
-        setCompanies(d.companies || []);
+      if (companiesRes.status === "fulfilled") {
+        setCompanies(companiesRes.value.companies || []);
       }
-      if (statsRes.ok) {
-        const d = await statsRes.json();
-        setStats(d);
+      if (statsRes.status === "fulfilled") {
+        setStats(statsRes.value);
       }
-      if (stationsRes.ok) {
-        const d = await stationsRes.json();
-        setStations(d.stations || []);
+      if (stationsRes.status === "fulfilled") {
+        setStations(stationsRes.value.stations || []);
       }
     } catch (e) {
       console.error(e);
@@ -170,7 +166,6 @@ export default function SuperAdminPanel() {
     if (staffForm.password.length < 8) {
       setStaffError("La contraseña debe tener al menos 8 caracteres"); return;
     }
-    const endpoint = staffForm.role === "DRIVER" ? "driver" : "seller";
     setStaffSaving(true);
     try {
       const body: any = {
@@ -184,12 +179,9 @@ export default function SuperAdminPanel() {
       if (staffForm.phone) body.phone = staffForm.phone;
       if (staffForm.role === "AGENCY_SELLER" && staffForm.stationId) body.stationId = staffForm.stationId;
 
-      const res = await authFetch(`${API}/api/v1/admin/users/${endpoint}`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Error al crear ${endpoint}`);
+      const data = staffForm.role === "DRIVER"
+        ? await createDriver<any>(body)
+        : await createSeller<any>(body);
       const roleLabel = staffForm.role === "DRIVER" ? "Conductor" : "Vendedor";
       setStaffForm({ name: "", email: "", password: "", companyId: "", role: "DRIVER", docType: "DNI", docNum: "", phone: "", stationId: "" });
       showToast(`✅ ${roleLabel} "${data.user.name}" creado exitosamente`, "success");
@@ -214,12 +206,7 @@ export default function SuperAdminPanel() {
     }
     setFormSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/admin/users/admin`, {
-        method: "POST",
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear ADMIN");
+      const data = await createAdmin<any>(form);
       setForm({ name: "", email: "", password: "", companyId: "" });
       showToast(`✅ ADMIN "${data.user.name}" creado exitosamente`, "success");
       setActiveTab("users");
@@ -239,12 +226,7 @@ export default function SuperAdminPanel() {
         if (!newCompanyId) { showToast("Selecciona una empresa para este rol", "error"); return; }
         body.companyId = newCompanyId;
       }
-      const res = await authFetch(`${API}/api/v1/admin/users/${userId}/role`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cambiar rol");
+      await changeUserRole(userId, body);
       showToast(`Rol actualizado a ${ROLE_CONFIG[newRole].label}`, "success");
       setChangingRole(null);
       loadData();
@@ -255,12 +237,8 @@ export default function SuperAdminPanel() {
 
   // ─── Activar / Desactivar usuario ─────────────────────────────────────────
   async function handleToggleActive(userId: string, currentlyActive: boolean) {
-    const endpoint = currentlyActive ? "deactivate" : "activate";
     try {
-      const res = await authFetch(`${API}/api/v1/admin/users/${userId}/${endpoint}`, {
-        method: "PATCH",
-      });
-      if (!res.ok) throw new Error("Error al cambiar estado");
+      await setUserActive(userId, !currentlyActive);
       showToast(currentlyActive ? "Usuario desactivado" : "Usuario activado", "success");
       loadData();
     } catch (err: any) {
@@ -739,17 +717,12 @@ export default function SuperAdminPanel() {
               }
               setCompanySaving(true);
               try {
-                const res = await authFetch(`${API}/api/v1/companies`, {
-                  method: "POST",
-                  body: JSON.stringify({
-                    ruc: companyForm.ruc,
-                    tradeName: companyForm.tradeName,
-                    legalName: companyForm.legalName,
-                    commissionRate: parseFloat(companyForm.commissionRate) || 0,
-                  }),
+                const data = await createCompany<any>({
+                  ruc: companyForm.ruc,
+                  tradeName: companyForm.tradeName,
+                  legalName: companyForm.legalName,
+                  commissionRate: parseFloat(companyForm.commissionRate) || 0,
                 });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data.error || "Error al crear empresa");
                 setCompanyForm({ ruc: "", tradeName: "", legalName: "", commissionRate: "0" });
                 showToast(`✅ Empresa "${data.company.tradeName}" registrada exitosamente`, "success");
                 loadData();
