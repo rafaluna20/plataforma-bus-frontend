@@ -7,7 +7,12 @@ import {
   RefreshCw, Route, Map, Pencil, X, Save, Loader2, Search,
   ChevronUp, ChevronDown, Info, Clock, DollarSign
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
+import {
+  getRoutesByCompany, getAllStations,
+  createStation as createStationApi, updateStation, deleteStation as deleteStationApi,
+  createRoute, updateRoute, deleteRoute as deleteRouteApi,
+} from "@/lib/api/routes";
 import dynamic from "next/dynamic";
 
 const LocationPicker = dynamic(() => import("@/components/map/LocationPicker"), {
@@ -39,8 +44,6 @@ const PERU_CITIES: Record<string, { lat: number; lng: number }> = {
   huaraz: { lat: -9.5270, lng: -77.5278 },
   moquegua: { lat: -17.1933, lng: -70.9350 },
 };
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type Station = { id: string; name: string; city: string; address?: string; latitude?: number; longitude?: number };
 type Waypoint = {
@@ -188,19 +191,17 @@ export default function EmpresaAdminRutasPage() {
     setError("");
     try {
       // Obtener empresa por slug (intentar slug primero, luego por ID/RUC)
-      let compRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      let compData = await compRes.json();
-      if (!compRes.ok) {
-        compRes = await fetch(`${API}/api/v1/branding/id/${slugStr}`);
-        compData = await compRes.json();
-        if (!compRes.ok) throw new Error("Empresa no encontrada");
+      let compData: any;
+      try {
+        compData = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        compData = await getCompanyById<any>(slugStr as string);
       }
       const cid = compData.company?.id;
       setCompanyId(cid);
 
       // Cargar rutas
-      const routesRes = await authFetch(`${API}/api/v1/routes/company/${cid}`);
-      const routesData = await routesRes.json();
+      const routesData = await getRoutesByCompany<any>(cid);
       setRoutes(routesData.routes || []);
 
       // ✅ MEJORA #1: Cargar TODAS las estaciones en una sola llamada (sin hardcodear ciudades)
@@ -215,8 +216,7 @@ export default function EmpresaAdminRutasPage() {
   async function loadAllStations() {
     setStationsLoading(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes/stations`);
-      const data = await res.json();
+      const data = await getAllStations<any>();
       const allStations: Station[] = data.stations || [];
       setStations(allStations);
       setFilteredStations(allStations);
@@ -236,19 +236,14 @@ export default function EmpresaAdminRutasPage() {
     }
     setStationSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes/stations`, {
-        method: "POST",
-        body: JSON.stringify({
-          companyId,
-          name: stationForm.name.trim(),
-          city: stationForm.city.trim(),
-          address: stationForm.address.trim(),
-          latitude: parseFloat(stationForm.latitude),
-          longitude: parseFloat(stationForm.longitude),
-        }),
+      const data = await createStationApi<any>({
+        companyId,
+        name: stationForm.name.trim(),
+        city: stationForm.city.trim(),
+        address: stationForm.address.trim(),
+        latitude: parseFloat(stationForm.latitude),
+        longitude: parseFloat(stationForm.longitude),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear estación");
       // Agregar la nueva estación a la lista local
       setStations(s => [...s, data.station]);
       setShowStationForm(false);
@@ -379,17 +374,12 @@ export default function EmpresaAdminRutasPage() {
     setSaving(true);
     try {
       const payload = { companyId, name: routeName.trim(), serviceMode, waypoints };
-      let res, data;
 
       if (editingId) {
-        res = await authFetch(`${API}/api/v1/routes/${editingId}`, { method: "PUT", body: JSON.stringify(payload) });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al actualizar ruta");
+        await updateRoute(editingId, payload);
         setSuccess("✅ Ruta actualizada exitosamente");
       } else {
-        res = await authFetch(`${API}/api/v1/routes`, { method: "POST", body: JSON.stringify(payload) });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al crear ruta");
+        await createRoute(payload);
         setSuccess("✅ Ruta creada exitosamente");
       }
 
@@ -406,11 +396,7 @@ export default function EmpresaAdminRutasPage() {
   async function deleteRoute(id: string) {
     setDeleting(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al eliminar ruta");
-      }
+      await deleteRouteApi(id);
       setSuccess("✅ Ruta eliminada.");
       setDeleteConfirm(null);
       loadData();
@@ -457,34 +443,24 @@ export default function EmpresaAdminRutasPage() {
     setStationSaving(true);
     try {
       if (editingStationId) {
-        const res = await authFetch(`${API}/api/v1/routes/stations/${editingStationId}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            name: stationForm.name.trim(),
-            city: stationForm.city.trim(),
-            address: stationForm.address.trim(),
-            latitude: stationForm.latitude ? parseFloat(stationForm.latitude) : undefined,
-            longitude: stationForm.longitude ? parseFloat(stationForm.longitude) : undefined,
-          }),
+        const data = await updateStation<any>(editingStationId, {
+          name: stationForm.name.trim(),
+          city: stationForm.city.trim(),
+          address: stationForm.address.trim(),
+          latitude: stationForm.latitude ? parseFloat(stationForm.latitude) : undefined,
+          longitude: stationForm.longitude ? parseFloat(stationForm.longitude) : undefined,
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al actualizar estación");
         setStations(s => s.map(st => st.id === editingStationId ? { ...st, ...data.station } : st));
         showToast(`✅ Estación "${data.station.name}" actualizada`, "success");
       } else {
-        const res = await authFetch(`${API}/api/v1/routes/stations`, {
-          method: "POST",
-          body: JSON.stringify({
-            companyId,
-            name: stationForm.name.trim(),
-            city: stationForm.city.trim(),
-            address: stationForm.address.trim(),
-            latitude: parseFloat(stationForm.latitude),
-            longitude: parseFloat(stationForm.longitude),
-          }),
+        const data = await createStationApi<any>({
+          companyId,
+          name: stationForm.name.trim(),
+          city: stationForm.city.trim(),
+          address: stationForm.address.trim(),
+          latitude: parseFloat(stationForm.latitude),
+          longitude: parseFloat(stationForm.longitude),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al crear estación");
         setStations(s => [...s, data.station]);
         showToast(`✅ Estación "${data.station.name}" creada`, "success");
       }
@@ -501,9 +477,7 @@ export default function EmpresaAdminRutasPage() {
   async function deleteStation(id: string) {
     setDeletingStation(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes/stations/${id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al eliminar estación");
+      await deleteStationApi(id);
       setStations(s => s.filter(st => st.id !== id));
       setDeleteStationConfirm(null);
       showToast("✅ Estación eliminada", "success");

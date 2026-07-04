@@ -73,3 +73,12 @@ export async function apiDelete<T>(path: string, fallbackMessage = "Error al eli
   const res = await authFetch(resolveUrl(path), { method: "DELETE" });
   return handleResponse<T>(res, fallbackMessage);
 }
+
+/** PUT autenticado. */
+export async function apiPut<T>(path: string, body?: unknown, fallbackMessage = "Error al actualizar el recurso"): Promise<T> {
+  const res = await authFetch(resolveUrl(path), {
+    method: "PUT",
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  return handleResponse<T>(res, fallbackMessage);
+}
