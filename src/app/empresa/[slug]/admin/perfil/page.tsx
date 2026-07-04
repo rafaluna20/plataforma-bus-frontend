@@ -6,10 +6,8 @@ import {
   Building2, Palette, Phone, Globe, MapPin, Mail,
   Save, CheckCircle2, AlertCircle, RefreshCw, ExternalLink, Copy, Check
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
+import { getMyBranding, updateMyBranding } from "@/lib/api/branding";
 import ImageUploader from "@/components/ui/ImageUploader";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type CompanyBranding = {
   id: string;
@@ -62,9 +60,7 @@ export default function EmpresaAdminPerfilPage() {
   async function loadBranding() {
     setLoading(true);
     try {
-      const res = await authFetch(`${API}/api/v1/branding/me`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar branding");
+      const data = await getMyBranding<any>();
       const c: CompanyBranding = data.company;
       setCompany(c);
       setForm({
@@ -104,12 +100,7 @@ export default function EmpresaAdminPerfilPage() {
 
     setSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/branding/me`, {
-        method: "PATCH",
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al guardar");
+      const data = await updateMyBranding<any>(form);
       setCompany(data.company);
       setSuccess("✅ Perfil actualizado exitosamente");
       setTimeout(() => setSuccess(""), 4000);

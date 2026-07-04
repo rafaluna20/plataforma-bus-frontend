@@ -4,6 +4,10 @@ export function getStationsByCity<T = any>(city: string) {
   return apiGet<T>(`/api/v1/routes/stations?city=${encodeURIComponent(city)}`, "Error al cargar estaciones");
 }
 
+export function getAllStations<T = any>() {
+  return apiGet<T>(`/api/v1/routes/stations`, "Error al cargar estaciones");
+}
+
 export function createStation<T = any>(body: unknown) {
   return apiPost<T>(`/api/v1/routes/stations`, body, "Error al crear estación");
 }

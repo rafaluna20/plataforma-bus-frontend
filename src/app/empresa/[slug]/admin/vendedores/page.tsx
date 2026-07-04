@@ -6,9 +6,9 @@ import {
   Plus, Users, AlertCircle, CheckCircle2, RefreshCw,
   X, MapPin, ToggleLeft, ToggleRight, Loader2
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
+import { getUsers, createSeller, toggleUser } from "@/lib/api/admin";
+import { getAllStations } from "@/lib/api/routes";
 
 type Seller = {
   id: string;
@@ -59,25 +59,21 @@ export default function AdminVendedoresPage() {
     setError("");
     try {
       // Obtener empresa
-      let compRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      let compData = await compRes.json();
-      if (!compRes.ok) {
-        // Intentar por ID
-        compRes = await fetch(`${API}/api/v1/branding/id/${slugStr}`);
-        compData = await compRes.json();
-        if (!compRes.ok) throw new Error("Empresa no encontrada");
+      let compData: any;
+      try {
+        compData = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        compData = await getCompanyById<any>(slugStr as string);
       }
       const cid = compData.company?.id;
       setCompanyId(cid);
 
       // Cargar vendedores de la empresa
-      const usersRes = await authFetch(`${API}/api/v1/admin/users?companyId=${cid}&role=AGENCY_SELLER&limit=100`);
-      const usersData = await usersRes.json();
+      const usersData = await getUsers<any>({ companyId: cid, role: "AGENCY_SELLER", limit: 100 });
       setSellers(usersData.data || []);
 
       // Cargar todas las estaciones (sin filtro de ciudad)
-      const stRes = await authFetch(`${API}/api/v1/routes/stations`);
-      const stData = await stRes.json();
+      const stData = await getAllStations<any>();
       setStations(stData.stations || []);
 
     } catch (e: any) {
@@ -107,12 +103,7 @@ export default function AdminVendedoresPage() {
 
     setSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/admin/users/seller`, {
-        method: "POST",
-        body: JSON.stringify({ ...form, companyId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear vendedor");
+      const data = await createSeller<any>({ ...form, companyId });
 
       setSuccess(`✅ Vendedor ${data.user.name} creado exitosamente.`);
       setShowForm(false);
@@ -129,15 +120,7 @@ export default function AdminVendedoresPage() {
   async function toggleSeller(seller: Seller) {
     setToggling(seller.id);
     try {
-      const res = await authFetch(`${API}/api/v1/admin/users/${seller.id}/toggle`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: !seller.isActive }),
-      });
-      if (!res.ok) {
-        // Fallback: intentar con role endpoint
-        const data = await res.json();
-        throw new Error(data.error || "Error al cambiar estado");
-      }
+      await toggleUser(seller.id, !seller.isActive);
       const updated = !seller.isActive;
       setSellers(prev => prev.map(s => s.id === seller.id ? { ...s, isActive: updated } : s));
       setSuccess(`✅ Vendedor ${seller.name} ${updated ? "activado" : "desactivado"}.`);
