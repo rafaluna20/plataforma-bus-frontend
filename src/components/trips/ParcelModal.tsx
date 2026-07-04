@@ -5,8 +5,7 @@ import {
   X, Package, User, Phone, MapPin, ArrowRight,
   DollarSign, Weight, FileText, Loader2, CheckCircle2
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-import { API_URL } from "@/lib/config";
+import { createParcel } from "@/lib/api/parcels";
 
 type Waypoint = {
   id: string;
@@ -93,26 +92,19 @@ export default function ParcelModal({
 
     setSaving(true);
     try {
-      const res = await authFetch(`${API_URL}/api/v1/parcels`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripId,
-          senderName:     form.senderName.trim(),
-          senderDoc:      form.senderDoc.trim(),
-          receiverName:   form.receiverName.trim(),
-          receiverDoc:    form.receiverDoc.trim(),
-          startWaypointId: form.startWaypointId,
-          endWaypointId:   form.endWaypointId,
-          description:    form.description.trim() || undefined,
-          weightKg:       form.weightKg ? parseFloat(form.weightKg) : undefined,
-          totalPrice:     parseFloat(form.totalPrice),
-          paymentMethod:  form.paymentMethod,
-        }),
+      await createParcel({
+        tripId,
+        senderName:     form.senderName.trim(),
+        senderDoc:      form.senderDoc.trim(),
+        receiverName:   form.receiverName.trim(),
+        receiverDoc:    form.receiverDoc.trim(),
+        startWaypointId: form.startWaypointId,
+        endWaypointId:   form.endWaypointId,
+        description:    form.description.trim() || undefined,
+        weightKg:       form.weightKg ? parseFloat(form.weightKg) : undefined,
+        totalPrice:     parseFloat(form.totalPrice),
+        paymentMethod:  form.paymentMethod,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al registrar encomienda");
 
       setSuccess(true);
       setTimeout(() => {

@@ -6,9 +6,8 @@ import {
   Bus, Clock, ArrowRight, RefreshCw, Ticket, Search,
   AlertCircle, MapPin, Users, ChevronRight, Activity,
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanyBySlug } from "@/lib/api/branding";
+import { searchTrips } from "@/lib/api/trips";
 
 type Waypoint = {
   id: string;
@@ -97,9 +96,7 @@ export default function EmpresaAdminVentaPage() {
 
   async function loadCompany() {
     try {
-      const res  = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      const data = await res.json();
-      if (!res.ok) return;
+      const data = await getCompanyBySlug<any>(slugStr as string);
       const cid = data.company.id;
       setCompanyId(cid);
       setCompanyName(data.company.tradeName);
@@ -116,9 +113,7 @@ export default function EmpresaAdminVentaPage() {
     setLoading(true);
     setError("");
     try {
-      const qs  = new URLSearchParams({ companyId: cid, date, limit: "100" });
-      const res  = await fetch(`${API}/api/v1/trips/search?${qs}`);
-      const data = await res.json();
+      const data = await searchTrips<any>({ companyId: cid, date, limit: 100 });
       setTrips(data.trips || []);
     } catch {
       setError("Error al cargar los viajes.");
