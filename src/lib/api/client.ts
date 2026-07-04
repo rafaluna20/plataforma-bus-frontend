@@ -67,3 +67,9 @@ export async function apiPatch<T>(path: string, body?: unknown, fallbackMessage 
   });
   return handleResponse<T>(res, fallbackMessage);
 }
+
+/** DELETE autenticado. */
+export async function apiDelete<T>(path: string, fallbackMessage = "Error al eliminar el recurso"): Promise<T> {
+  const res = await authFetch(resolveUrl(path), { method: "DELETE" });
+  return handleResponse<T>(res, fallbackMessage);
+}

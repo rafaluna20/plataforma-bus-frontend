@@ -7,11 +7,10 @@ import {
   Bus, Plus, AlertCircle, CheckCircle2, RefreshCw,
   Pencil, Trash2, ToggleLeft, ToggleRight, X, Save, Loader2
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
+import { getCompanyBySlug } from "@/lib/api/branding";
+import { getVehiclesByCompany, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi } from "@/lib/api/vehicles";
 import ImageUploader from "@/components/ui/ImageUploader";
 import SeatConfigEditor, { SeatTemplate } from "@/components/ui/SeatConfigEditor";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type Vehicle = {
   id: string;
@@ -58,22 +57,14 @@ export default function EmpresaAdminVehiculosPage() {
 
   const { data: companyData } = useQuery<{ company?: { id: string } }>({
     queryKey: ["companyBranding", slugStr],
-    queryFn: async () => {
-      const res = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      if (!res.ok) throw new Error("Empresa no encontrada");
-      return res.json();
-    },
+    queryFn: () => getCompanyBySlug(slugStr as string),
     enabled: !!slugStr,
   });
   const companyId = companyData?.company?.id || "";
 
   const { data: vehiclesData, isLoading: loading, error: queryError, refetch: refetchVehicles } = useQuery<{ vehicles: Vehicle[] }>({
     queryKey: ["vehicles", companyId],
-    queryFn: async () => {
-      const res = await authFetch(`${API}/api/v1/vehicles/company/${companyId}`);
-      if (!res.ok) throw new Error("Error al cargar vehículos");
-      return res.json();
-    },
+    queryFn: () => getVehiclesByCompany(companyId),
     enabled: !!companyId,
   });
   const vehicles = vehiclesData?.vehicles || [];
@@ -138,18 +129,13 @@ export default function EmpresaAdminVehiculosPage() {
       const payload: any = { companyId, ...form };
       if (seatTemplate) payload.seatTemplate = seatTemplate;
 
-      let res, data;
       if (editingId) {
         // EDITAR
-        res  = await authFetch(`${API}/api/v1/vehicles/${editingId}`, { method: "PATCH", body: JSON.stringify(payload) });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al actualizar vehículo");
+        await updateVehicle(editingId, payload);
         setSuccess(`✅ Vehículo ${form.plateNumber} actualizado exitosamente.`);
       } else {
         // CREAR
-        res  = await authFetch(`${API}/api/v1/vehicles`, { method: "POST", body: JSON.stringify(payload) });
-        data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al registrar vehículo");
+        const data = await createVehicle<any>(payload);
         setSuccess(`✅ Vehículo ${data.vehicle?.plateNumber || form.plateNumber} registrado exitosamente.`);
       }
 
@@ -165,12 +151,7 @@ export default function EmpresaAdminVehiculosPage() {
 
   async function toggleActive(v: Vehicle) {
     try {
-      const res  = await authFetch(`${API}/api/v1/vehicles/${v.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: !v.isActive }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cambiar estado");
+      await updateVehicle(v.id, { isActive: !v.isActive });
       setSuccess(`✅ Vehículo ${v.plateNumber} ${!v.isActive ? "activado" : "desactivado"}.`);
       refetchVehicles();
       setTimeout(() => setSuccess(""), 3000);
@@ -182,11 +163,7 @@ export default function EmpresaAdminVehiculosPage() {
   async function deleteVehicle(id: string) {
     setDeleting(true);
     try {
-      const res  = await authFetch(`${API}/api/v1/vehicles/${id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al eliminar vehículo");
-      }
+      await deleteVehicleApi(id);
       setSuccess("✅ Vehículo eliminado.");
       setDeleteConfirm(null);
       refetchVehicles();
