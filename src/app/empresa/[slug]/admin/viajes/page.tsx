@@ -8,9 +8,14 @@ import {
   Clock, ArrowRight, Activity, Edit2, X, AlertTriangle,
   Copy, XCircle, ChevronDown, UserRound,
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanyBySlug } from "@/lib/api/branding";
+import {
+  getManagementTripManifest, updateManagementTrip, cancelTrip as cancelTripApi,
+  createManagementTrip, getTripsByCompany, searchTrips,
+} from "@/lib/api/trips";
+import { getRoutesByCompany } from "@/lib/api/routes";
+import { getVehiclesByCompany } from "@/lib/api/vehicles";
+import { getUsers } from "@/lib/api/admin";
 
 type Trip = {
   id: string;
@@ -143,11 +148,8 @@ export default function EmpresaAdminViajesPage() {
     setEditBookingsCount(null);
     setLoadingBookingsCount(true);
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips/${trip.id}/manifest`);
-      if (res.ok) {
-        const data = await res.json();
-        setEditBookingsCount(data.count ?? data.passengers?.length ?? 0);
-      }
+      const data = await getManagementTripManifest<any>(trip.id);
+      setEditBookingsCount(data.count ?? data.passengers?.length ?? 0);
     } catch { /* silent */ }
     finally { setLoadingBookingsCount(false); }
   }
@@ -169,31 +171,25 @@ export default function EmpresaAdminViajesPage() {
 
     setUpdatingTrip(true);
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips/${editingTrip.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ vehicleId: editForm.vehicleId, departureTime: editForm.departureTime, driverId: editForm.driverId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.error || "";
-        if (msg.includes("futuro") || msg.includes("fecha"))
-          setEditFormError("📅 La fecha de salida debe ser en el futuro.");
-        else if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
-          setEditFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
-        else if (msg.includes("programado") || msg.includes("conflicto"))
-          setEditFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
-        else if (msg.includes("inactivo"))
-          setEditFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
-        else
-          setEditFormError(`❌ ${msg || "Error al reprogramar el viaje."}`);
-        return;
-      }
+      await updateManagementTrip(editingTrip.id, { vehicleId: editForm.vehicleId, departureTime: editForm.departureTime, driverId: editForm.driverId });
       setSuccess("✅ Viaje reprogramado exitosamente");
       setEditingTrip(null);
       loadData();
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
-      setEditFormError("❌ Error de conexión. Verifica que el servidor esté activo.");
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("futuro") || msg.includes("fecha"))
+        setEditFormError("📅 La fecha de salida debe ser en el futuro.");
+      else if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
+        setEditFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
+      else if (msg.includes("programado") || msg.includes("conflicto"))
+        setEditFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
+      else if (msg.includes("inactivo"))
+        setEditFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
+      else if (e?.status !== undefined)
+        setEditFormError(`❌ ${msg || "Error al reprogramar el viaje."}`);
+      else
+        setEditFormError("❌ Error de conexión. Verifica que el servidor esté activo.");
     } finally {
       setUpdatingTrip(false);
     }
@@ -208,11 +204,8 @@ export default function EmpresaAdminViajesPage() {
     setCancelFormError("");
     setCancelBookingsCount(null);
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips/${trip.id}/manifest`);
-      if (res.ok) {
-        const data = await res.json();
-        setCancelBookingsCount(data.count ?? data.passengers?.length ?? 0);
-      }
+      const data = await getManagementTripManifest<any>(trip.id);
+      setCancelBookingsCount(data.count ?? data.passengers?.length ?? 0);
     } catch { /* silent */ }
   }
 
@@ -225,21 +218,14 @@ export default function EmpresaAdminViajesPage() {
     setCancelingLoading(true);
     setCancelFormError("");
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips/${cancelingTrip.id}/cancel`, {
-        method: "PATCH",
-        body: JSON.stringify({ reason }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setCancelFormError(`❌ ${data.error || "Error al cancelar el viaje."}`);
-        return;
-      }
+      await cancelTripApi(cancelingTrip.id, reason);
       setSuccess("🚫 Viaje cancelado correctamente");
       setCancelingTrip(null);
       loadData();
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
-      setCancelFormError("❌ Error de conexión.");
+    } catch (e: any) {
+      if (e?.status !== undefined) setCancelFormError(`❌ ${e.message || "Error al cancelar el viaje."}`);
+      else setCancelFormError("❌ Error de conexión.");
     } finally {
       setCancelingLoading(false);
     }
@@ -261,32 +247,26 @@ export default function EmpresaAdminViajesPage() {
     setDuplicateLoading(true);
     setDuplicateError("");
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips`, {
-        method: "POST",
-        body: JSON.stringify({
-          routeId: duplicatingTrip.route.id,
-          vehicleId: duplicatingTrip.vehicle.id,
-          departureTime: duplicateDate,
-          driverId: duplicatingTrip.driver?.id,
-        }),
+      await createManagementTrip({
+        routeId: duplicatingTrip.route.id,
+        vehicleId: duplicatingTrip.vehicle.id,
+        departureTime: duplicateDate,
+        driverId: duplicatingTrip.driver?.id,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.error || "";
-        if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
-          setDuplicateError("🧑‍✈️ El conductor ya tiene un viaje asignado en ese horario.");
-        else if (msg.includes("conflicto") || msg.includes("programado"))
-          setDuplicateError("🚌 El vehículo ya tiene un viaje en ese horario.");
-        else
-          setDuplicateError(`❌ ${msg || "Error al duplicar el viaje."}`);
-        return;
-      }
       setSuccess("📋 Viaje duplicado exitosamente");
       setDuplicatingTrip(null);
       loadData();
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
-      setDuplicateError("❌ Error de conexión.");
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("conductor") && msg.includes("ya tiene un viaje"))
+        setDuplicateError("🧑‍✈️ El conductor ya tiene un viaje asignado en ese horario.");
+      else if (msg.includes("conflicto") || msg.includes("programado"))
+        setDuplicateError("🚌 El vehículo ya tiene un viaje en ese horario.");
+      else if (e?.status !== undefined)
+        setDuplicateError(`❌ ${msg || "Error al duplicar el viaje."}`);
+      else
+        setDuplicateError("❌ Error de conexión.");
     } finally {
       setDuplicateLoading(false);
     }
@@ -298,9 +278,7 @@ export default function EmpresaAdminViajesPage() {
     setLoading(true);
     setError("");
     try {
-      const compRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      const compData = await compRes.json();
-      if (!compRes.ok) throw new Error("Empresa no encontrada");
+      const compData = await getCompanyBySlug<any>(slugStr as string);
       const cid = compData.company?.id;
       setCompanyId(cid);
 
@@ -309,23 +287,21 @@ export default function EmpresaAdminViajesPage() {
       const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
 
       if (isAdmin) {
-        const [tripsRes, routesRes, vehiclesRes, driversRes] = await Promise.all([
-          authFetch(`${API}/api/v1/management/trips/company/${cid}`),
-          authFetch(`${API}/api/v1/routes/company/${cid}`),
-          authFetch(`${API}/api/v1/vehicles/company/${cid}`),
-          authFetch(`${API}/api/v1/admin/users?companyId=${cid}&role=DRIVER&limit=100`),
+        const [tripsRes, routesRes, vehiclesRes, driversRes] = await Promise.allSettled([
+          getTripsByCompany<any>(cid),
+          getRoutesByCompany<any>(cid),
+          getVehiclesByCompany<any>(cid),
+          getUsers<any>({ companyId: cid, role: "DRIVER", limit: 100 }),
         ]);
-        const [tripsData, routesData, vehiclesData, driversData] = await Promise.all([
-          tripsRes.json(), routesRes.json(), vehiclesRes.json(), driversRes.json(),
-        ]);
-        setTrips(tripsData.trips || []);
-        setRoutes(routesData.routes || []);
-        setVehicles(vehiclesData.vehicles || []);
+        setTrips(tripsRes.status === "fulfilled" ? (tripsRes.value.trips || []) : []);
+        setRoutes(routesRes.status === "fulfilled" ? (routesRes.value.routes || []) : []);
+        setVehicles(vehiclesRes.status === "fulfilled" ? (vehiclesRes.value.vehicles || []) : []);
         // El endpoint de usuarios devuelve solo conductores activos para asignar
-        setDrivers((driversData.users || driversData.data || []).filter((u: any) => u.isActive !== false));
+        setDrivers(driversRes.status === "fulfilled"
+          ? (driversRes.value.users || driversRes.value.data || []).filter((u: any) => u.isActive !== false)
+          : []);
       } else {
-        const tripsRes = await fetch(`${API}/api/v1/trips/search?companyId=${cid}&limit=100`);
-        const tripsData = await tripsRes.json();
+        const tripsData = await searchTrips<any>({ companyId: cid, limit: 100 });
         setTrips(tripsData.trips || tripsData.data || []);
         setRoutes([]);
         setVehicles([]);
@@ -353,27 +329,20 @@ export default function EmpresaAdminViajesPage() {
 
     setSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips`, {
-        method: "POST",
-        body: JSON.stringify({ routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime, driverId: tripForm.driverId || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data.error || "";
-        if (msg.includes("futuro") || msg.includes("fecha")) setFormError("📅 La fecha de salida debe ser en el futuro.");
-        else if (msg.includes("conductor") && msg.includes("ya tiene un viaje")) setFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
-        else if (msg.includes("programado") || msg.includes("conflicto")) setFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
-        else if (msg.includes("inactivo")) setFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
-        else setFormError(`❌ ${msg || "Error al programar el viaje."}`);
-        return;
-      }
+      await createManagementTrip({ routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime, driverId: tripForm.driverId || undefined });
       setSuccess("✅ Viaje programado exitosamente");
       setShowForm(false);
       setTripForm({ routeId: "", vehicleId: "", departureTime: "", driverId: "" });
       loadData();
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
-      setFormError("❌ Error de conexión. Verifica que el servidor esté activo.");
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("futuro") || msg.includes("fecha")) setFormError("📅 La fecha de salida debe ser en el futuro.");
+      else if (msg.includes("conductor") && msg.includes("ya tiene un viaje")) setFormError("🧑‍✈️ Este conductor ya tiene un viaje asignado para esa fecha.");
+      else if (msg.includes("programado") || msg.includes("conflicto")) setFormError("🚌 Este vehículo ya tiene un viaje programado para esa fecha.");
+      else if (msg.includes("inactivo")) setFormError("🔴 El vehículo o conductor seleccionado está inactivo.");
+      else if (e?.status !== undefined) setFormError(`❌ ${msg || "Error al programar el viaje."}`);
+      else setFormError("❌ Error de conexión. Verifica que el servidor esté activo.");
     } finally {
       setSaving(false);
     }

@@ -1,4 +1,4 @@
-import { apiGetPublic, apiGet, apiPatch } from "./client";
+import { apiGetPublic, apiGet, apiPost, apiPatch } from "./client";
 
 // ─── Endpoints públicos (/api/v1/trips) ────────────────────────────────────────
 
@@ -48,4 +48,18 @@ export function getTripsByCompany<T = any>(companyId: string) {
 /** Avanza el estado del viaje (SCHEDULED→BOARDING→IN_TRANSIT→COMPLETED). Requiere sesión. */
 export function updateTripStatus<T = any>(tripId: string, status: string) {
   return apiPatch<T>(`/api/v1/management/trips/${tripId}/status`, { status }, "No se pudo actualizar el estado del viaje");
+}
+
+/** Programa un nuevo viaje (o lo usa para duplicar uno existente en otra fecha). */
+export function createManagementTrip<T = any>(body: unknown) {
+  return apiPost<T>(`/api/v1/management/trips`, body, "Error al programar el viaje");
+}
+
+/** Reprograma vehículo/hora/conductor de un viaje existente. */
+export function updateManagementTrip<T = any>(tripId: string, body: unknown) {
+  return apiPatch<T>(`/api/v1/management/trips/${tripId}`, body, "Error al reprogramar el viaje");
+}
+
+export function cancelTrip<T = any>(tripId: string, reason: string) {
+  return apiPatch<T>(`/api/v1/management/trips/${tripId}/cancel`, { reason }, "Error al cancelar el viaje");
 }
