@@ -6,8 +6,11 @@ import {
   Banknote, CreditCard, ArrowRight, Pencil, Package, TicketCheck, Save, RotateCcw,
   Users, RefreshCw, MapPin, Printer
 } from "lucide-react";
-import { authFetch, getCurrentUser } from "@/lib/auth";
-import { API_URL, calcTripPrice } from "@/lib/config";
+import { getCurrentUser } from "@/lib/auth";
+import { calcTripPrice } from "@/lib/config";
+import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
+import { getTripManifest } from "@/lib/api/trips";
+import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
 import { printPassengerManifest, printParcelManifest } from "@/lib/printUtils";
@@ -829,18 +832,15 @@ function SaleModal({
     if (startWpId === endWpId) { setError("El origen y destino deben ser diferentes."); return; }
     setLoading(true); setError("");
     try {
-      const endpoint = payMethod === "cash"
-        ? `${API_URL}/api/v1/bookings`
-        : `${API_URL}/api/v1/bookings/digital`;
       const body: any = {
         tripId, passengerName: name.trim(), passengerDocType: docType,
         passengerDocNum: docNum.trim(), startWaypointId: startWpId,
         endWaypointId: endWpId, seatId,
       };
       if (payMethod === "digital") body.paymentDetails = { method: "YAPE", phoneNumber: phone };
-      const res = await authFetch(endpoint, { method: "POST", body: JSON.stringify(body) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al registrar la venta");
+      const data = payMethod === "cash"
+        ? await createCashBooking<any>(body)
+        : await createDigitalBooking<any>(body);
       // Guardar datos del pasajero para el ticket antes de limpiar el form
       setSavedName(name.trim());
       setSavedDoc(docNum.trim());
@@ -1174,9 +1174,7 @@ export default function SeatMapModal({
     setLoadingPassengers(true);
     setPassengersError("");
     try {
-      const res = await fetch(`${API_URL}/api/v1/trips/${tripId}/manifest`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar pasajeros");
+      const data = await getTripManifest<any>(tripId);
       setPassengers(data.passengers || []);
     } catch (e: any) {
       setPassengersError(e.message);
@@ -1198,9 +1196,7 @@ export default function SeatMapModal({
     setLoadingParcels(true);
     setParcelsError("");
     try {
-      const res = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripId}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar encomiendas");
+      const data = await getParcelsByTrip<any>(tripId);
       setParcels(data.parcels || []);
     } catch (e: any) {
       setParcelsError(e.message);
@@ -1219,15 +1215,7 @@ export default function SeatMapModal({
   // Actualizar estado de encomienda
   const handleParcelStatusChange = async (parcelId: string, newStatus: string) => {
     try {
-      const res = await authFetch(`${API_URL}/api/v1/parcels/${parcelId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al actualizar estado");
-      }
+      await updateParcelStatus(parcelId, newStatus);
       setParcels(prev =>
         prev.map(p => (p.id === parcelId ? { ...p, status: newStatus } : p))
       );
