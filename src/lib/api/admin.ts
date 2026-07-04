@@ -13,6 +13,10 @@ export function createSeller<T = any>(body: unknown) {
   return apiPost<T>(`/api/v1/admin/users/seller`, body, "Error al crear vendedor");
 }
 
+export function createDriver<T = any>(body: unknown) {
+  return apiPost<T>(`/api/v1/admin/users/driver`, body, "Error al crear conductor");
+}
+
 export function toggleUser<T = any>(userId: string, isActive: boolean) {
   return apiPatch<T>(`/api/v1/admin/users/${userId}/toggle`, { isActive }, "Error al cambiar estado");
 }

@@ -7,9 +7,8 @@ import {
   X, Phone, FileText, ToggleLeft, ToggleRight, Loader2,
   Mail, IdCard, User
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
+import { getUsers, createDriver, toggleUser } from "@/lib/api/admin";
 
 type Driver = {
   id: string;
@@ -56,19 +55,17 @@ export default function AdminConductoresPage() {
     setError("");
     try {
       // Obtener empresa
-      let compRes = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      let compData = await compRes.json();
-      if (!compRes.ok) {
-        compRes = await fetch(`${API}/api/v1/branding/id/${slugStr}`);
-        compData = await compRes.json();
-        if (!compRes.ok) throw new Error("Empresa no encontrada");
+      let compData: any;
+      try {
+        compData = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        compData = await getCompanyById<any>(slugStr as string);
       }
       const cid = compData.company?.id;
       setCompanyId(cid);
 
       // Cargar conductores de la empresa
-      const usersRes = await authFetch(`${API}/api/v1/admin/users?companyId=${cid}&role=DRIVER&limit=100`);
-      const usersData = await usersRes.json();
+      const usersData = await getUsers<any>({ companyId: cid, role: "DRIVER", limit: 100 });
       setDrivers(usersData.data || []);
 
     } catch (e: any) {
@@ -108,12 +105,7 @@ export default function AdminConductoresPage() {
       if (form.docNum) body.docNum = form.docNum;
       if (form.phone) body.phone = form.phone;
 
-      const res = await authFetch(`${API}/api/v1/admin/users/driver`, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear conductor");
+      const data = await createDriver<any>(body);
 
       setSuccess(`✅ Conductor ${data.user.name} creado exitosamente.`);
       setShowForm(false);
@@ -130,14 +122,7 @@ export default function AdminConductoresPage() {
   async function toggleDriver(driver: Driver) {
     setToggling(driver.id);
     try {
-      const res = await authFetch(`${API}/api/v1/admin/users/${driver.id}/toggle`, {
-        method: "PATCH",
-        body: JSON.stringify({ isActive: !driver.isActive }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Error al cambiar estado");
-      }
+      await toggleUser(driver.id, !driver.isActive);
       const updated = !driver.isActive;
       setDrivers(prev => prev.map(d => d.id === driver.id ? { ...d, isActive: updated } : d));
       setSuccess(`✅ Conductor ${driver.name} ${updated ? "activado" : "desactivado"}.`);
