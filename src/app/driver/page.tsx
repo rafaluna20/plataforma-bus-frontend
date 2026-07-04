@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { Play, Square, Users, MapPin, Activity, Navigation, Bus, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
-import { authFetch, getAccessToken, getCurrentUser, type AuthUser } from "@/lib/auth";
+import { getAccessToken, getCurrentUser, type AuthUser } from "@/lib/auth";
+import { getMyDriverTrips, getTripManifest, updateTripStatus } from "@/lib/api/trips";
 
 type AssignedTrip = {
   id: string;
@@ -59,9 +60,7 @@ export default function DriverPanel() {
       setLoadingTrips(true);
       setTripsError("");
       try {
-        const res = await authFetch(`${API_URL}/api/v1/management/trips/my-driver`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Error al cargar tus viajes");
+        const data = await getMyDriverTrips<any>();
         setTrips(data.trips || []);
         if ((data.trips || []).length === 1) setSelectedTripId(data.trips[0].id);
       } catch (e: any) {
@@ -77,11 +76,8 @@ export default function DriverPanel() {
     if (!selectedTripId) { setManifest([]); return; }
     (async () => {
       try {
-        const res = await fetch(`${API_URL}/api/v1/trips/${selectedTripId}/manifest`);
-        if (res.ok) {
-          const data = await res.json();
-          setManifest(data.passengers || []);
-        }
+        const data = await getTripManifest<any>(selectedTripId);
+        setManifest(data.passengers || []);
       } catch { /* silent */ }
     })();
   }, [selectedTripId]);
@@ -155,12 +151,7 @@ export default function DriverPanel() {
     setUpdatingStatus(true);
     setStatusError("");
     try {
-      const res = await authFetch(`${API_URL}/api/v1/management/trips/${trip.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: flow.next }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el estado del viaje");
+      await updateTripStatus(trip.id, flow.next);
       setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: flow.next } : t));
     } catch (e: any) {
       setStatusError(e.message || "Error al actualizar el estado del viaje");

@@ -3,9 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Users, Bus, Clock, CheckCircle2, Play, MapPin, AlertCircle, Navigation } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getManagementTripDetail, getManagementTripManifest, updateTripStatus } from "@/lib/api/trips";
 
 const STATUS_FLOW: Record<string, { next: string; label: string; btnLabel: string; btnColor: string }> = {
   SCHEDULED: { next: "BOARDING", label: "Programado", btnLabel: "Iniciar Abordaje", btnColor: "bg-yellow-500 hover:bg-yellow-600" },
@@ -30,12 +28,10 @@ export default function TripDetailPage() {
   async function loadTrip() {
     setLoading(true);
     try {
-      const [tripRes, manifestRes] = await Promise.all([
-        authFetch(`${API}/api/v1/management/trips/${id}`),
-        authFetch(`${API}/api/v1/management/trips/${id}/manifest`),
+      const [tripData, manifestData] = await Promise.all([
+        getManagementTripDetail<any>(id as string),
+        getManagementTripManifest<any>(id as string),
       ]);
-      const tripData = await tripRes.json();
-      const manifestData = await manifestRes.json();
       setTrip(tripData);
       setManifest(manifestData.passengers || []);
     } catch (e) { console.error(e); }
@@ -48,12 +44,10 @@ export default function TripDetailPage() {
     if (!flow?.next) return;
     setUpdating(true);
     try {
-      const res = await authFetch(`${API}/api/v1/management/trips/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: flow.next }),
-      });
-      if (res.ok) loadTrip();
-    } finally { setUpdating(false); }
+      await updateTripStatus(id as string, flow.next);
+      loadTrip();
+    } catch (e) { console.error(e); }
+    finally { setUpdating(false); }
   }
 
   if (loading) return (
