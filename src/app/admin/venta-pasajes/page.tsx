@@ -7,9 +7,9 @@ import {
   AlertCircle, Loader2, Banknote, CreditCard, Printer,
   RefreshCw, MapPin, ArrowRight, X
 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { fetchProfile } from "@/lib/auth";
+import { searchTrips, getTripDetail } from "@/lib/api/trips";
+import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -98,9 +98,8 @@ export default function VentaPasajesPage() {
 
   async function loadProfile() {
     try {
-      const res = await authFetch(`${API}/api/v1/auth/me`);
-      const data = await res.json();
-      const cid = data.company?.id || data.companyId;
+      const data: any = await fetchProfile();
+      const cid = data?.company?.id || data?.companyId;
       if (!cid) { setError("No se encontró empresa asociada."); setLoading(false); return; }
       setCompanyId(cid);
       await loadTrips(cid, searchDate);
@@ -114,9 +113,7 @@ export default function VentaPasajesPage() {
     setLoading(true);
     setError("");
     try {
-      const qs = new URLSearchParams({ companyId: cid, date, limit: "50" });
-      const res = await fetch(`${API}/api/v1/trips/search?${qs}`);
-      const data = await res.json();
+      const data = await searchTrips<any>({ companyId: cid, date, limit: 50 });
       setTrips(data.trips || []);
     } catch {
       setError("Error al cargar los viajes.");
@@ -133,15 +130,12 @@ export default function VentaPasajesPage() {
     setLoadingTrip(true);
 
     try {
-      const res = await fetch(`${API}/api/v1/trips/${trip.id}`);
-      const data = await res.json();
-      if (res.ok) {
-        setOccupiedSeats(data.occupiedSeats || []);
-        const wps = data.trip?.route?.waypoints || trip.route.waypoints;
-        if (wps.length >= 2) {
-          setStartWaypointId(wps[0].id);
-          setEndWaypointId(wps[wps.length - 1].id);
-        }
+      const data = await getTripDetail<any>(trip.id);
+      setOccupiedSeats(data.occupiedSeats || []);
+      const wps = data.trip?.route?.waypoints || trip.route.waypoints;
+      if (wps.length >= 2) {
+        setStartWaypointId(wps[0].id);
+        setEndWaypointId(wps[wps.length - 1].id);
       }
     } catch { }
     finally { setLoadingTrip(false); }
@@ -189,10 +183,6 @@ export default function VentaPasajesPage() {
     setBookingError("");
 
     try {
-      const endpoint = paymentMethod === "cash"
-        ? `${API}/api/v1/bookings`
-        : `${API}/api/v1/bookings/digital`;
-
       const body: any = {
         tripId: selectedTrip.id,
         passengerName: passengerName.trim(),
@@ -207,12 +197,9 @@ export default function VentaPasajesPage() {
         body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
       }
 
-      const res = await authFetch(endpoint, {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al registrar la venta");
+      const data = paymentMethod === "cash"
+        ? await createCashBooking<any>(body)
+        : await createDigitalBooking<any>(body);
 
       setReceipt(data.booking);
       setOccupiedSeats(prev => [...prev, selectedSeat]);
