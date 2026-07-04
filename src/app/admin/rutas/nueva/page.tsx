@@ -3,9 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Plus, Trash2, MapPin, ArrowRight, AlertCircle, CheckCircle2 } from "lucide-react";
-import { authFetch } from "@/lib/auth";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getCompanies } from "@/lib/api/companies";
+import { getStationsByCity, createStation as createStationApi, createRoute } from "@/lib/api/routes";
 
 type Station = { id: string; name: string; city: string };
 type Waypoint = { stationId: string; stopOrder: number; estimatedDurationMins: number; basePrice: number };
@@ -48,20 +47,17 @@ export default function NewRoutePage() {
 
   async function loadInitial() {
     try {
-      // Usar authFetch para endpoints protegidos
-      const compRes = await authFetch(`${API}/api/v1/companies`);
-      const compData = await compRes.json();
+      const compData = await getCompanies<any>();
       const cid = compData.companies?.[0]?.id;
       setCompanyId(cid || "");
 
       // Fetch stations from common cities (endpoint protegido)
       const cities = ["Lima", "Huancayo", "Chosica", "La Oroya", "Ayacucho", "Ica", "Piura", "Trujillo", "Arequipa", "Cusco"];
       const allStations: Station[] = [];
-      
+
       await Promise.all(cities.map(async city => {
         try {
-          const res = await authFetch(`${API}/api/v1/routes/stations?city=${city}`);
-          const data = await res.json();
+          const data = await getStationsByCity<any>(city);
           if (data.stations) allStations.push(...data.stations);
         } catch {}
       }));
@@ -79,19 +75,14 @@ export default function NewRoutePage() {
     }
     setStationSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes/stations`, {
-        method: "POST",
-        body: JSON.stringify({
-          companyId,
-          name: stationForm.name,
-          city: stationForm.city,
-          address: stationForm.address,
-          latitude: parseFloat(stationForm.latitude),
-          longitude: parseFloat(stationForm.longitude),
-        }),
+      const data = await createStationApi<any>({
+        companyId,
+        name: stationForm.name,
+        city: stationForm.city,
+        address: stationForm.address,
+        latitude: parseFloat(stationForm.latitude),
+        longitude: parseFloat(stationForm.longitude),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear estación");
       setStations(s => [...s, data.station]);
       setShowStationForm(false);
       setStationForm({ name: "", city: "", address: "", latitude: "", longitude: "" });
@@ -124,12 +115,7 @@ export default function NewRoutePage() {
 
     setSaving(true);
     try {
-      const res = await authFetch(`${API}/api/v1/routes`, {
-        method: "POST",
-        body: JSON.stringify({ companyId, name: routeName, serviceMode, waypoints }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al crear ruta");
+      await createRoute({ companyId, name: routeName, serviceMode, waypoints });
       setSuccess(true);
       setTimeout(() => router.push("/admin"), 2000);
     } catch (e: any) {

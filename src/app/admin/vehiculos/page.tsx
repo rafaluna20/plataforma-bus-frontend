@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Bus, Plus, Trash2, ArrowLeft, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
-import { authFetch } from "@/lib/auth";
+import { fetchProfile } from "@/lib/auth";
+import { getVehiclesByCompany, createVehicle as createVehicleApi } from "@/lib/api/vehicles";
 import ImageUploader from "@/components/ui/ImageUploader";
 import SeatConfigEditor, { SeatTemplate } from "@/components/ui/SeatConfigEditor";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type Vehicle = {
   id: string;
@@ -75,15 +74,13 @@ export default function VehiculosPage() {
     setError("");
     try {
       // Usar /auth/me para obtener el companyId del usuario logueado (igual que el panel admin)
-      const profileRes = await authFetch(`${API}/api/v1/auth/me`);
-      const profileData = await profileRes.json();
-      const cid = profileData.company?.id || profileData.companyId;
+      const profileData: any = await fetchProfile();
+      const cid = profileData?.company?.id || profileData?.companyId;
       if (!cid) { setError("No se encontró empresa asociada a tu cuenta."); setLoading(false); return; }
 
       setCompanyId(cid);
 
-      const vRes = await authFetch(`${API}/api/v1/vehicles/company/${cid}`);
-      const vData = await vRes.json();
+      const vData = await getVehiclesByCompany<any>(cid);
       setVehicles(vData.vehicles || []);
     } catch (e) {
       setError("Error al cargar los vehículos.");
@@ -109,12 +106,7 @@ export default function VehiculosPage() {
         payload.seatTemplate = seatTemplate;
       }
 
-      const res = await authFetch(`${API}/api/v1/vehicles`, {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al registrar vehículo");
+      const data = await createVehicleApi<any>(payload);
 
       setFormSuccess(`Vehículo ${data.vehicle?.plateNumber || form.plateNumber} registrado exitosamente.`);
       setForm({ plateNumber: "", vehicleType: "MINIVAN", serviceMode: "INTERPROVINCIAL", capacity: 12, imageUrl: "" });
