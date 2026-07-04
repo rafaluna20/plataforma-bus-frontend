@@ -12,6 +12,8 @@ import {
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
 import { useAuth } from "@/context/AuthContext";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
+import { searchTrips } from "@/lib/api/trips";
 import dynamic from "next/dynamic";
 import EmpresaBottomNav from "@/components/layout/EmpresaBottomNav";
 
@@ -33,8 +35,6 @@ const MapaInteractivo = dynamic(() => import("@/components/map/MapaInteractivo")
     </div>
   ),
 });
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 type CompanyPublic = {
   id: string;
@@ -277,19 +277,12 @@ export default function EmpresaPublicaPage() {
     try {
       const slugStr = Array.isArray(slug) ? slug[0] : slug;
 
-      // Intentar primero por slug
-      let res = await fetch(`${API}/api/v1/branding/slug/${slugStr}`);
-      let data = await res.json();
-
-      // Si no encontró por slug, intentar por ID/RUC (cuando la empresa no tiene slug aún)
-      if (!res.ok) {
-        const idRes = await fetch(`${API}/api/v1/branding/id/${slugStr}`);
-        if (idRes.ok) {
-          data = await idRes.json();
-          res = idRes;
-        } else {
-          throw new Error(data.error || "Empresa no encontrada");
-        }
+      // Intentar primero por slug; si no encontró, intentar por ID/RUC (cuando la empresa no tiene slug aún)
+      let data: any;
+      try {
+        data = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        data = await getCompanyById<any>(slugStr as string);
       }
 
       setCompany(data.company);
@@ -304,20 +297,15 @@ export default function EmpresaPublicaPage() {
   async function loadTrips(companyId: string, params?: { origin?: string; destination?: string; date?: string; vehicleType?: string }) {
     setSearching(true);
     try {
-      const qs = new URLSearchParams({
+      const data = await searchTrips<any>({
         companyId,
-        origin: params?.origin || "",
-        destination: params?.destination || "",
-        date: params?.date || "",
-        ...(params?.vehicleType ? { vehicleType: params.vehicleType } : {}),
-        limit: "50",
+        origin: params?.origin,
+        destination: params?.destination,
+        date: params?.date,
+        vehicleType: params?.vehicleType,
+        limit: 50,
       });
-      const url = `${API}/api/v1/trips/search?${qs.toString()}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        setTrips((data.trips || []).slice(0, 50));
-      }
+      setTrips((data.trips || []).slice(0, 50));
     } catch { }
     finally { setSearching(false); }
   }
@@ -462,9 +450,8 @@ export default function EmpresaPublicaPage() {
     setMapaLoading(true);
     try {
       if (company) {
-        const res = await fetch(`${API}/api/v1/trips/search?companyId=${company.id}&limit=50`);
-        if (res.ok) {
-          const data = await res.json();
+        {
+          const data = await searchTrips<any>({ companyId: company.id, limit: 50 });
           const trips: Trip[] = Array.isArray(data) ? data : (data.trips || data.data || []);
 
           // Helper: extrae {lat, lng} desde station.location.coordinates (GeoJSON: [lng, lat])

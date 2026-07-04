@@ -16,6 +16,7 @@ export function searchTrips<T = any>(params: {
   date?: string;
   companyId?: string;
   limit?: number;
+  vehicleType?: string;
 }) {
   const query = new URLSearchParams({
     origin: params.origin || "",
@@ -23,6 +24,7 @@ export function searchTrips<T = any>(params: {
     date: params.date || "",
     ...(params.companyId ? { companyId: params.companyId } : {}),
     ...(params.limit ? { limit: String(params.limit) } : {}),
+    ...(params.vehicleType ? { vehicleType: params.vehicleType } : {}),
   }).toString();
   return apiGetPublic<T>(`/api/v1/trips/search?${query}`, "Error al buscar viajes");
 }
