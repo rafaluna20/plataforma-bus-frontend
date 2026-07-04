@@ -140,6 +140,12 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
   CANCELLED:  { label: "CANCELADO",  color: "#ef4444", bg: "rgba(239,68,68,0.15)" },
 };
 
+const TRIP_STATUS_FLOW: Record<string, { next: string; btnLabel: string }> = {
+  SCHEDULED:  { next: "BOARDING",   btnLabel: "Autorizar Abordaje" },
+  BOARDING:   { next: "IN_TRANSIT", btnLabel: "Iniciar Viaje" },
+  IN_TRANSIT: { next: "COMPLETED",  btnLabel: "Confirmar Llegada" },
+};
+
 const paymentStatusLabel: Record<string, { label: string; color: string; bg: string }> = {
   PENDING_CASH:  { label: "Pago al abordar", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
   PAID_DIGITAL:  { label: "Pagado digital",  color: "#10b981", bg: "rgba(16,185,129,0.12)" },
@@ -194,6 +200,10 @@ export default function EmpresaViajeDetailPage() {
   const [parcelsError, setParcelsError]     = useState("");
   const [parcelSearch, setParcelSearch]     = useState("");
   const [parcelModalOpen, setParcelModalOpen] = useState(false);
+
+  // ─── Estado para autorizar abordaje / confirmar llegada ──────────────────────
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusError, setStatusError]       = useState("");
 
   // ─── Carga de datos ──────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -264,6 +274,28 @@ export default function EmpresaViajeDetailPage() {
   }, [slugStr, tripIdStr]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ─── Autorizar abordaje / confirmar llegada (avanza el estado del viaje) ─────
+  async function advanceTripStatus() {
+    if (!trip) return;
+    const flow = TRIP_STATUS_FLOW[trip.status];
+    if (!flow) return;
+    setUpdatingStatus(true);
+    setStatusError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/management/trips/${trip.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: flow.next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el estado del viaje");
+      loadData();
+    } catch (e: any) {
+      setStatusError(e.message || "Error al actualizar el estado del viaje");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  }
 
   // ─── Carga de pasajeros (manifiesto) ─────────────────────────────────────────
   const loadPassengers = useCallback(async () => {
@@ -1241,6 +1273,32 @@ export default function EmpresaViajeDetailPage() {
           {/* ── PANEL LATERAL STICKY (1/3) ───────────────────────────────── */}
           <div className="lg:col-span-1">
             <div className="sticky top-20 space-y-4">
+
+              {/* Autorizar abordaje / confirmar llegada (staff, según permisos por rol) */}
+              {isCompanyStaff && TRIP_STATUS_FLOW[trip.status] &&
+                !(currentUser?.role === "AGENCY_SELLER" && trip.status === "IN_TRANSIT") && (
+                <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 space-y-3 backdrop-blur-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Estado del Viaje</p>
+                    <span className="px-2.5 py-1 rounded-full text-xs font-bold"
+                      style={{ background: statusInfo.bg, color: statusInfo.color }}>
+                      {statusInfo.label}
+                    </span>
+                  </div>
+                  {statusError && (
+                    <p className="text-red-400 text-xs bg-red-500/10 p-2 rounded-lg">{statusError}</p>
+                  )}
+                  <button
+                    onClick={advanceTripStatus}
+                    disabled={updatingStatus}
+                    className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    {updatingStatus ? "Actualizando..." : TRIP_STATUS_FLOW[trip.status].btnLabel}
+                  </button>
+                </div>
+              )}
 
               {/* Tarjeta de reserva */}
               <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 space-y-4 backdrop-blur-sm">

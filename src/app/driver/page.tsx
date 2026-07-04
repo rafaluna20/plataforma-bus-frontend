@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useRouter } from "next/navigation";
-import { Play, Square, Users, MapPin, Activity, Navigation, Bus, ArrowRight, Loader2 } from "lucide-react";
+import { Play, Square, Users, MapPin, Activity, Navigation, Bus, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
 import { authFetch, getAccessToken, getCurrentUser, type AuthUser } from "@/lib/auth";
 
 type AssignedTrip = {
@@ -17,6 +17,12 @@ type AssignedTrip = {
 type Passenger = { name: string; seatId: string; origin: string; destination: string; paymentStatus: string };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+
+const STATUS_FLOW: Record<string, { next: string; btnLabel: string; btnColor: string }> = {
+  SCHEDULED:  { next: "BOARDING",   btnLabel: "Autorizar Abordaje", btnColor: "bg-yellow-500 hover:bg-yellow-600" },
+  BOARDING:   { next: "IN_TRANSIT", btnLabel: "Iniciar Viaje",       btnColor: "bg-indigo-500 hover:bg-indigo-600" },
+  IN_TRANSIT: { next: "COMPLETED",  btnLabel: "Confirmar Llegada",   btnColor: "bg-emerald-500 hover:bg-emerald-600" },
+};
 
 export default function DriverPanel() {
   const router = useRouter();
@@ -33,6 +39,8 @@ export default function DriverPanel() {
   const [errorMsg, setErrorMsg] = useState('');
   const [manifest, setManifest] = useState<Passenger[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   const socketRef = useRef<Socket | null>(null);
   const watchIdRef = useRef<number | null>(null);
@@ -138,6 +146,29 @@ export default function DriverPanel() {
     }
   };
 
+  // ── Autorizar abordaje / iniciar viaje / confirmar llegada ──────────────────
+  const advanceStatus = async () => {
+    const trip = trips.find(t => t.id === selectedTripId);
+    if (!trip) return;
+    const flow = STATUS_FLOW[trip.status];
+    if (!flow) return;
+    setUpdatingStatus(true);
+    setStatusError("");
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/management/trips/${trip.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: flow.next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el estado del viaje");
+      setTrips(prev => prev.map(t => t.id === trip.id ? { ...t, status: flow.next } : t));
+    } catch (e: any) {
+      setStatusError(e.message || "Error al actualizar el estado del viaje");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   // ── Estados de carga / auth ──────────────────────────────────────────────────
   if (!authChecked) {
     return (
@@ -231,6 +262,23 @@ export default function DriverPanel() {
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Autorizar abordaje / iniciar viaje / confirmar llegada */}
+        {selectedTrip && STATUS_FLOW[selectedTrip.status] && (
+          <div className="space-y-2">
+            {statusError && (
+              <p className="text-red-400 text-xs bg-red-500/10 p-2 rounded-lg">{statusError}</p>
+            )}
+            <button
+              onClick={advanceStatus}
+              disabled={updatingStatus}
+              className={`w-full py-3.5 rounded-xl font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 transition-colors ${STATUS_FLOW[selectedTrip.status].btnColor}`}
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              {updatingStatus ? "Actualizando..." : STATUS_FLOW[selectedTrip.status].btnLabel}
+            </button>
           </div>
         )}
 
