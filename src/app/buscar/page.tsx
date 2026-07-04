@@ -5,8 +5,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { MapPin, Calendar, Search, ArrowRightLeft, Bus, ArrowRight, Clock, Map, Filter, CarFront, Car, WifiOff } from "lucide-react";
 import type { Trip } from "@/types/booking";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { searchTrips } from "@/lib/api/trips";
 
 export default function BuscarViajesPage() {
   const router = useRouter();
@@ -23,9 +22,8 @@ export default function BuscarViajesPage() {
   useEffect(() => {
     const fetchInitialTrips = async () => {
       try {
-        const res = await fetch(`${API}/api/v1/trips/search?origin=&destination=&date=`);
-        const data = await res.json();
-        if (res.ok && data.trips) {
+        const data = await searchTrips<any>({});
+        if (data.trips) {
           setResults(data.trips);
           setNetworkError(false);
         }
@@ -45,9 +43,7 @@ export default function BuscarViajesPage() {
     setResults([]);
 
     try {
-      const res = await fetch(`${API}/api/v1/trips/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al buscar viajes");
+      const data = await searchTrips<any>({ origin, destination, date });
       setResults(data.trips || []);
       setNetworkError(false);
     } catch (e: unknown) {

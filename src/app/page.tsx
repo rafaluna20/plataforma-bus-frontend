@@ -3,7 +3,8 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { authFetch } from "@/lib/auth";
+import { searchTrips } from "@/lib/api/trips";
+import { getMyBookings } from "@/lib/api/bookings";
 import TripCard from "@/components/trips/TripCard";
 import TicketModal from "@/components/trips/TicketModal";
 import StatCard from "@/components/dashboard/StatCard";
@@ -15,8 +16,6 @@ import {
   ChevronLeft, ChevronRight, Package, QrCode, Award, Shield, Info
 } from "lucide-react";
 import type { Trip } from "@/types/booking";
-
-import { API_URL } from "@/lib/config";
 
 // ─── Destinos para el slider (Opción B) ──────────────────────────────────────
 const sliderDestinations = [
@@ -99,9 +98,8 @@ export default function HomePage() {
   useEffect(() => {
     const fetchInitialTrips = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/v1/trips/search?origin=&destination=&date=`);
-        const data = await res.json();
-        if (res.ok && data.trips) {
+        const data = await searchTrips<any>({});
+        if (data.trips) {
           setResults(data.trips);
           setNetworkError(false);
         }
@@ -121,28 +119,25 @@ export default function HomePage() {
     const fetchUserBookings = async () => {
       setLoadingBooking(true);
       try {
-        const res = await authFetch(`${API_URL}/api/v1/bookings/my?page=1&limit=10`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.data && data.data.length > 0) {
-            const now = new Date();
-            // Buscar reservas futuras que estén pagadas o confirmadas
-            const validBookings = data.data.filter((b: any) => {
-              if (!b.trip?.departureTime) return false;
-              const depTime = new Date(b.trip.departureTime);
-              return depTime > now && (b.paymentStatus === 'PAID_DIGITAL' || b.paymentStatus === 'PENDING_CASH' || b.paymentStatus === 'PAID');
-            });
-            
-            if (validBookings.length > 0) {
-              // Ordenar por fecha de salida más cercana
-              validBookings.sort((a: any, b: any) => new Date(a.trip.departureTime).getTime() - new Date(b.trip.departureTime).getTime());
-              setUpcomingBooking(validBookings[0]);
-            } else {
-              setUpcomingBooking(null);
-            }
+        const data = await getMyBookings<any>(1, 10);
+        if (data && data.data && data.data.length > 0) {
+          const now = new Date();
+          // Buscar reservas futuras que estén pagadas o confirmadas
+          const validBookings = data.data.filter((b: any) => {
+            if (!b.trip?.departureTime) return false;
+            const depTime = new Date(b.trip.departureTime);
+            return depTime > now && (b.paymentStatus === 'PAID_DIGITAL' || b.paymentStatus === 'PENDING_CASH' || b.paymentStatus === 'PAID');
+          });
+
+          if (validBookings.length > 0) {
+            // Ordenar por fecha de salida más cercana
+            validBookings.sort((a: any, b: any) => new Date(a.trip.departureTime).getTime() - new Date(b.trip.departureTime).getTime());
+            setUpcomingBooking(validBookings[0]);
           } else {
             setUpcomingBooking(null);
           }
+        } else {
+          setUpcomingBooking(null);
         }
       } catch (err) {
         console.error("Error al cargar reservas", err);
@@ -166,11 +161,7 @@ export default function HomePage() {
     setLoading(true);
     setResults([]);
     try {
-      const res = await fetch(
-        `${API_URL}/api/v1/trips/search?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&date=${encodeURIComponent(date)}`
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al buscar viajes");
+      const data = await searchTrips<any>({ origin, destination, date });
       setResults(data.trips || []);
       setNetworkError(false);
     } catch (e: unknown) {

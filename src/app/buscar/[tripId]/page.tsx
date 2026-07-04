@@ -8,8 +8,8 @@ import {
   CheckCircle2, AlertCircle, Share2, Heart, ChevronRight,
   Loader2, CreditCard, Banknote, Phone
 } from "lucide-react";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+import { getTripDetail } from "@/lib/api/trips";
+import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -110,9 +110,7 @@ export default function TripDetailPage() {
     setLoading(true);
     try {
       const id = Array.isArray(tripId) ? tripId[0] : tripId;
-      const res = await fetch(`${API}/api/v1/trips/${id}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Viaje no encontrado");
+      const data = await getTripDetail<any>(id as string);
       setTrip(data.trip);
       setOccupiedSeats(data.occupiedSeats || []);
 
@@ -170,10 +168,6 @@ export default function TripDetailPage() {
     setBookingError("");
 
     try {
-      const endpoint = paymentMethod === "cash"
-        ? `${API}/api/v1/bookings`
-        : `${API}/api/v1/bookings/digital`;
-
       const body: any = {
         tripId: trip.id,
         passengerName: passengerName.trim(),
@@ -188,13 +182,9 @@ export default function TripDetailPage() {
         body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
       }
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al reservar");
+      const data = paymentMethod === "cash"
+        ? await createCashBooking<any>(body)
+        : await createDigitalBooking<any>(body);
 
       setBookingSuccess(data.booking);
       setOccupiedSeats(prev => [...prev, selectedSeats[0]]);
