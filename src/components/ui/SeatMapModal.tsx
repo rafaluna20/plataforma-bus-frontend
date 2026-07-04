@@ -2163,6 +2163,129 @@ export default function SeatMapModal({
             )}
           </div>
         )}
+
+        {/* Mobile view for Vendedores */}
+        {sidebarMode === "vendedores" && (() => {
+          type SellerStat = {
+            id: string;
+            name: string;
+            email: string;
+            role: string;
+            tickets: number;
+            ticketTotal: number;
+            parcelsCount: number;
+            parcelsTotal: number;
+          };
+          const sellerMap = new Map<string, SellerStat>();
+
+          passengers.forEach(p => {
+            const key = p.seller?.id ?? "__sin_vendedor__";
+            if (!sellerMap.has(key)) {
+              sellerMap.set(key, {
+                id: p.seller?.id ?? "",
+                name: p.seller?.name ?? "Sin vendedor",
+                email: p.seller?.email ?? "",
+                role: p.seller?.role ?? "",
+                tickets: 0,
+                ticketTotal: 0,
+                parcelsCount: 0,
+                parcelsTotal: 0
+              });
+            }
+            const s = sellerMap.get(key)!;
+            s.tickets++;
+            s.ticketTotal += Number(p.price ?? 0);
+          });
+
+          parcels.forEach(p => {
+            const key = (p as any).seller?.id ?? "__sin_vendedor__";
+            if (!sellerMap.has(key)) {
+              sellerMap.set(key, {
+                id: (p as any).seller?.id ?? "",
+                name: (p as any).seller?.name ?? "Sin vendedor",
+                email: (p as any).seller?.email ?? "",
+                role: (p as any).seller?.role ?? "",
+                tickets: 0,
+                ticketTotal: 0,
+                parcelsCount: 0,
+                parcelsTotal: 0
+              });
+            }
+            const s = sellerMap.get(key)!;
+            s.parcelsCount++;
+            s.parcelsTotal += Number(p.totalPrice ?? 0);
+          });
+
+          const stats = Array.from(sellerMap.values()).sort(
+            (a, b) => (b.tickets + b.parcelsCount) - (a.tickets + a.parcelsCount)
+          );
+
+          return (
+            <div className="w-full lg:hidden flex-1 overflow-y-auto space-y-4 px-4 py-4 bg-[#0d1424]">
+              <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-2">
+                <h4 className="text-white font-bold text-sm">Resumen por Vendedor</h4>
+                <span className="text-[10px] text-slate-400">Total: {stats.length}</span>
+              </div>
+
+              {(loadingPassengers || loadingParcels) ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+                </div>
+              ) : stats.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-white/5 rounded-2xl">
+                  <Users className="w-10 h-10 text-slate-700 mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm">Sin datos de ventas</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {stats.map((s, i) => {
+                    const initials = s.name !== "Sin vendedor"
+                      ? s.name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()
+                      : "?";
+                    const grandTotal = s.ticketTotal + s.parcelsTotal;
+                    return (
+                      <div
+                        key={s.id || i}
+                        className="rounded-xl p-3 border border-white/8 hover:border-white/15 transition-all flex flex-col gap-2"
+                        style={{ background: "rgba(255,255,255,0.02)" }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                            style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                            {initials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-white text-xs font-bold truncate">{s.name}</p>
+                              <span className="text-xs font-extrabold" style={{ color: primaryColor }}>#{i + 1}</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 truncate">{s.email || "Venta directa / Agencia"}</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 bg-black/20 p-1.5 rounded-lg">
+                          <div className="text-center border-r border-white/5">
+                            <p className="text-[9px] text-slate-500">🎫 Pasajes</p>
+                            <p className="text-xs font-bold text-white mt-0.5">{s.tickets} <span className="text-[10px] font-normal text-slate-400">(S/{s.ticketTotal.toFixed(0)})</span></p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[9px] text-slate-500">📦 Encom.</p>
+                            <p className="text-xs font-bold text-white mt-0.5">{s.parcelsCount} <span className="text-[10px] font-normal text-slate-400">(S/{s.parcelsTotal.toFixed(0)})</span></p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] pt-2 border-t border-white/5 font-semibold text-slate-300">
+                          <span>Recaudado total:</span>
+                          <span className="font-extrabold text-white">S/ {grandTotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ─── MODAL DE VENTA ──────────────────────────────────────────────────── */}
