@@ -12,8 +12,11 @@ import {
 import SeatMapModal from "@/components/ui/SeatMapModal";
 import ParcelModal from "@/components/trips/ParcelModal";
 import EmpresaBottomNav from "@/components/layout/EmpresaBottomNav";
-import { API_URL, calcTripPrice, calcTripPriceRange } from "@/lib/config";
-import { authFetch, getCurrentUser } from "@/lib/auth";
+import { calcTripPrice, calcTripPriceRange } from "@/lib/config";
+import { getCurrentUser } from "@/lib/auth";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
+import { getTripDetail, getTripManifest, updateTripStatus } from "@/lib/api/trips";
+import { getParcelsByTrip } from "@/lib/api/parcels";
 import dynamic from "next/dynamic";
 
 // Importar LiveMap dinámicamente (solo cliente, usa Leaflet)
@@ -212,23 +215,15 @@ export default function EmpresaViajeDetailPage() {
     setError("");
     try {
       // 1. Cargar branding de empresa (intentar por slug, luego por ID/RUC)
-      let companyRes = await fetch(`${API_URL}/api/v1/branding/slug/${slugStr}`);
-      let companyData = await companyRes.json();
-
-      if (!companyRes.ok) {
-        const idRes = await fetch(`${API_URL}/api/v1/branding/id/${slugStr}`);
-        if (idRes.ok) {
-          companyData = await idRes.json();
-          companyRes = idRes;
-        } else {
-          throw new Error(companyData.error || "Empresa no encontrada");
-        }
+      let companyData: any;
+      try {
+        companyData = await getCompanyBySlug(slugStr);
+      } catch {
+        companyData = await getCompanyById(slugStr);
       }
 
       // 2. Cargar detalle del viaje
-      const tripRes = await fetch(`${API_URL}/api/v1/trips/${tripIdStr}`);
-      const tripData = await tripRes.json();
-      if (!tripRes.ok) throw new Error(tripData.error || "Viaje no encontrado");
+      const tripData = await getTripDetail<any>(tripIdStr);
 
       setCompany(companyData.company);
       setTrip(tripData.trip);
@@ -241,9 +236,8 @@ export default function EmpresaViajeDetailPage() {
 
       // Pre-cargar conteo real de pasajeros y asientos ocupados
       try {
-        const manifestRes = await fetch(`${API_URL}/api/v1/trips/${tripIdStr}/manifest`);
-        const manifestData = await manifestRes.json();
-        if (manifestRes.ok && manifestData.passengers) {
+        const manifestData = await getTripManifest<any>(tripIdStr);
+        if (manifestData.passengers) {
           setPassengers(manifestData.passengers);
           setPassengerCount(manifestData.passengers.length);
           setOccupiedSeats(manifestData.passengers.map((p: Passenger) => p.seatId));
@@ -256,9 +250,8 @@ export default function EmpresaViajeDetailPage() {
       const user = getCurrentUser();
       if (user && ["ADMIN", "SUPER_ADMIN"].includes(user.role)) {
         try {
-          const parcelsRes = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripIdStr}`);
-          const parcelsData = await parcelsRes.json();
-          if (parcelsRes.ok && parcelsData.parcels) {
+          const parcelsData = await getParcelsByTrip<any>(tripIdStr);
+          if (parcelsData.parcels) {
             setParcels(parcelsData.parcels);
           }
         } catch (err) {
@@ -283,12 +276,7 @@ export default function EmpresaViajeDetailPage() {
     setUpdatingStatus(true);
     setStatusError("");
     try {
-      const res = await authFetch(`${API_URL}/api/v1/management/trips/${trip.id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: flow.next }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "No se pudo actualizar el estado del viaje");
+      await updateTripStatus(trip.id, flow.next);
       loadData();
     } catch (e: any) {
       setStatusError(e.message || "Error al actualizar el estado del viaje");
@@ -303,9 +291,7 @@ export default function EmpresaViajeDetailPage() {
     setLoadingPassengers(true);
     setPassengersError("");
     try {
-      const res = await fetch(`${API_URL}/api/v1/trips/${tripIdStr}/manifest`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar pasajeros");
+      const data = await getTripManifest<any>(tripIdStr);
       const list = data.passengers || [];
       setPassengers(list);
       // Actualizar el contador real y los asientos ocupados con los datos del manifiesto
@@ -326,9 +312,7 @@ export default function EmpresaViajeDetailPage() {
     setLoadingParcels(true);
     setParcelsError("");
     try {
-      const res = await authFetch(`${API_URL}/api/v1/parcels/trip/${tripIdStr}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error al cargar encomiendas");
+      const data = await getParcelsByTrip<any>(tripIdStr);
       setParcels(data.parcels || []);
     } catch (e: any) {
       setParcelsError(e.message);
