@@ -85,7 +85,7 @@ export default function DriverPanel() {
   // ── Socket ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    socketRef.current = io(API_URL);
+    socketRef.current = io(API_URL, { auth: { token: getAccessToken() } });
     socketRef.current.on("connect", () => setIsConnected(true));
     socketRef.current.on("disconnect", () => setIsConnected(false));
     socketRef.current.on("error", (err: { message: string }) => {

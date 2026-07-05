@@ -21,13 +21,39 @@ export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY);
 }
 
+// El middleware de Next.js (server-side) no puede leer localStorage, así que
+// espejamos el mismo access token en una cookie legible para que pueda
+// verificar su firma (ver web/src/middleware.ts). No es un secreto adicional:
+// es el mismo JWT que ya vive en localStorage y viaja como Bearer token.
 function setAccessToken(token: string): void {
   localStorage.setItem(ACCESS_TOKEN_KEY, token);
+  if (typeof document !== "undefined") {
+    document.cookie = `access_token=${token}; path=/; SameSite=Lax; max-age=86400`;
+  }
 }
 
 function clearTokens(): void {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  if (typeof document !== "undefined") {
+    document.cookie = "access_token=; path=/; max-age=0";
+  }
+}
+
+/**
+ * Re-sincroniza la cookie `access_token` con el token vigente en localStorage.
+ * Útil tras un refresh silencioso o al recargar la app en una pestaña donde
+ * la cookie pudo no haberse propagado aún.
+ */
+export function syncSessionCookie(): void {
+  const token = getAccessToken();
+  if (token) {
+    if (typeof document !== "undefined") {
+      document.cookie = `access_token=${token}; path=/; SameSite=Lax; max-age=86400`;
+    }
+  } else {
+    clearTokens();
+  }
 }
 
 // ─── User Management ──────────────────────────────────────────────────────────
@@ -69,14 +95,6 @@ export async function login(email: string, password: string): Promise<AuthUser> 
   setAccessToken(data.accessToken);
   setCurrentUser(data.user);
 
-  // ─── Establecer cookie session_role para que el middleware Next.js pueda
-  // leer el rol del usuario y proteger rutas server-side.
-  // La cookie NO es HttpOnly para que el middleware pueda leerla.
-  // El token JWT real (seguro) sigue en localStorage.
-  if (typeof document !== "undefined") {
-    document.cookie = `session_role=${data.user.role}; path=/; SameSite=Lax; max-age=86400`;
-  }
-
   return data.user;
 }
 
@@ -105,11 +123,6 @@ export async function register(
   setAccessToken(data.accessToken);
   setCurrentUser(data.user);
 
-  // Establecer cookie session_role al registrarse (igual que en login)
-  if (typeof document !== "undefined") {
-    document.cookie = `session_role=${data.user.role}; path=/; SameSite=Lax; max-age=86400`;
-  }
-
   return data.user;
 }
 
@@ -130,10 +143,6 @@ export async function logout(): Promise<void> {
     }
   }
   clearTokens();
-  // Limpiar la cookie session_role al cerrar sesión
-  if (typeof document !== "undefined") {
-    document.cookie = "session_role=; path=/; max-age=0";
-  }
 }
 
 /**

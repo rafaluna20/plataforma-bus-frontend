@@ -24,7 +24,7 @@ export default function LoginPage() {
     try {
       const user = await login(email, password);
 
-      // Esperar un tick para que la cookie session_role se establezca
+      // Esperar un tick para que la cookie access_token se establezca
       // antes de que el middleware de Next.js evalúe la redirección
       await new Promise(resolve => setTimeout(resolve, 100));
 

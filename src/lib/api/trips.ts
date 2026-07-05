@@ -6,8 +6,10 @@ export function getTripDetail<T = any>(tripId: string) {
   return apiGetPublic<T>(`/api/v1/trips/${tripId}`, "Viaje no encontrado");
 }
 
+// Contiene PII (DNI/pasaporte de pasajeros) — requiere sesión de
+// DRIVER/AGENCY_SELLER/ADMIN/SUPER_ADMIN de la empresa dueña del viaje.
 export function getTripManifest<T = any>(tripId: string) {
-  return apiGetPublic<T>(`/api/v1/trips/${tripId}/manifest`, "Error al cargar pasajeros");
+  return apiGet<T>(`/api/v1/trips/${tripId}/manifest`, "Error al cargar pasajeros");
 }
 
 export function searchTrips<T = any>(params: {

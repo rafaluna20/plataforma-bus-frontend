@@ -248,7 +248,7 @@ export default function MapaInteractivo({
                   )}
                 </div>
                 <Link
-                  href={`/viajes/${v.id}`}
+                  href={`/buscar/${v.id}`}
                   style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     gap: 6, width: '100%', padding: '8px 0',

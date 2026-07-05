@@ -9,6 +9,7 @@ import {
   register as authRegister,
   fetchProfile,
   refreshAccessToken,
+  syncSessionCookie,
 } from "@/lib/auth";
 
 interface AuthContextType {
@@ -42,10 +43,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const serverUser = await fetchProfile();
     if (serverUser) {
       setUser(serverUser);
-      // Asegurar que la cookie session_role esté sincronizada
-      if (typeof document !== "undefined") {
-        document.cookie = `session_role=${serverUser.role}; path=/; SameSite=Lax; max-age=86400`;
-      }
+      // Asegurar que la cookie access_token (leída por el middleware) esté sincronizada
+      syncSessionCookie();
       return;
     }
 
@@ -55,9 +54,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       const refreshedUser = await fetchProfile();
       if (refreshedUser) {
         setUser(refreshedUser);
-        if (typeof document !== "undefined") {
-          document.cookie = `session_role=${refreshedUser.role}; path=/; SameSite=Lax; max-age=86400`;
-        }
+        syncSessionCookie();
       } else {
         setUser(null);
       }
@@ -65,9 +62,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     // Si no hay token válido, limpiar la cookie y el estado
-    if (typeof document !== "undefined") {
-      document.cookie = "session_role=; path=/; max-age=0";
-    }
+    syncSessionCookie();
     setUser(null);
   }, []);
 

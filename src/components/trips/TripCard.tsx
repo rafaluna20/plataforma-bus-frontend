@@ -115,7 +115,7 @@ export default function TripCard({ trip, originName, destinationName, variant = 
 
     const handleSelectClick = (e: React.MouseEvent) => {
         e.preventDefault(); e.stopPropagation();
-        router.push(`/viajes/${trip.id || 'trip-1'}`);
+        router.push(`/buscar/${trip.id}`);
     };
 
     // Color de barra de progreso
