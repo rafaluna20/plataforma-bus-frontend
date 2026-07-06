@@ -889,7 +889,7 @@ function SaleModal({
       style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
         style={{ background: "#0f172a" }}>
 
         {/* Header */}
@@ -1022,11 +1022,11 @@ function SaleModal({
               {/* Fila selector + número */}
               <div className="flex gap-2">
                 <select value={docType} onChange={e => setDocType(e.target.value)}
-                  className="rounded-xl px-3 py-3 text-white text-sm font-semibold focus:outline-none flex-shrink-0"
+                  className="rounded-xl px-2 py-3 text-white text-sm font-semibold focus:outline-none flex-shrink-0"
                   style={{
                     background: "rgba(99,102,241,0.20)",
                     border: "1.5px solid rgba(99,102,241,0.40)",
-                    minWidth: "80px"
+                    width: "72px"
                   }}>
                   <option value="DNI">DNI</option>
                   <option value="RUC">RUC</option>
