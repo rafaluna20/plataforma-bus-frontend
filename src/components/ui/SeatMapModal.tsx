@@ -1000,44 +1000,75 @@ function SaleModal({
               </div>
             )}
 
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Nombre completo *</label>
-              <input value={name} onChange={e => setName(e.target.value)}
-                placeholder="Juan Pérez García" required
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
-            </div>
+            {/* ── BUSCADOR DNI / RUC ─────────────────────────────────── */}
+            <div className="rounded-2xl p-4 space-y-3"
+              style={{
+                background: "linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.08) 100%)",
+                border: "1.5px solid rgba(99,102,241,0.35)",
+                boxShadow: "0 4px 24px rgba(99,102,241,0.10)"
+              }}>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Tipo</label>
+              {/* Título */}
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg" style={{ background: "rgba(99,102,241,0.25)" }}>
+                  <Search className="w-4 h-4" style={{ color: "#818cf8" }} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white leading-tight">Buscar pasajero</p>
+                  <p className="text-xs" style={{ color: "#a5b4fc" }}>Ingresa DNI o RUC para auto-completar</p>
+                </div>
+              </div>
+
+              {/* Fila selector + número */}
+              <div className="flex gap-2">
                 <select value={docType} onChange={e => setDocType(e.target.value)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
+                  className="rounded-xl px-3 py-3 text-white text-sm font-semibold focus:outline-none flex-shrink-0"
+                  style={{
+                    background: "rgba(99,102,241,0.20)",
+                    border: "1.5px solid rgba(99,102,241,0.40)",
+                    minWidth: "80px"
+                  }}>
                   <option value="DNI">DNI</option>
                   <option value="RUC">RUC</option>
                   <option value="CE">CE</option>
                   <option value="PASAPORTE">Pasaporte</option>
                 </select>
+
+                <input value={docNum} onChange={e => setDocNum(e.target.value)}
+                  placeholder={docType === "DNI" ? "12345678" : docType === "RUC" ? "20123456789" : "Número de documento"}
+                  className="flex-1 rounded-xl px-4 py-3 text-white text-sm font-medium placeholder-slate-500 focus:outline-none transition-colors"
+                  style={{
+                    background: "rgba(15,23,42,0.60)",
+                    border: "1.5px solid rgba(99,102,241,0.35)"
+                  }} />
+
+                <button type="button" onClick={() => handleLookup(docType, docNum)}
+                  disabled={!docNum.trim() || searchingDoc}
+                  className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-40"
+                  style={{
+                    background: searchingDoc ? "rgba(99,102,241,0.30)" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                    color: "white",
+                    boxShadow: searchingDoc ? "none" : "0 4px 14px rgba(99,102,241,0.45)",
+                    minWidth: "52px"
+                  }}>
+                  {searchingDoc
+                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                    : <Search className="w-4 h-4" />}
+                </button>
               </div>
-              <div className="col-span-2">
-                <label className="text-xs text-slate-400 mb-1 block">Número *</label>
-                <div className="relative">
-                  <input value={docNum} onChange={e => setDocNum(e.target.value)}
-                    placeholder={docType === "DNI" ? "12345678" : docType === "RUC" ? "20123456789" : "Número"} required
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-3 pr-10 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
-                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                    {searchingDoc ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
-                    ) : (
-                      <button type="button" onClick={() => handleLookup(docType, docNum)}
-                        disabled={!docNum.trim()}
-                        className="p-1 rounded text-slate-500 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30"
-                        title="Buscar pasajero">
-                        <Search className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+
+              {/* Hint auto-búsqueda */}
+              <p className="text-xs" style={{ color: "rgba(165,180,252,0.70)" }}>
+                ✦ Se busca automáticamente al ingresar {docType === "DNI" ? "8" : docType === "RUC" ? "11" : "los"} dígitos
+              </p>
+            </div>
+
+            {/* ── NOMBRE COMPLETO ────────────────────────────────────── */}
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Nombre completo *</label>
+              <input value={name} onChange={e => setName(e.target.value)}
+                placeholder="Juan Pérez García" required
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
             </div>
 
             <div>
