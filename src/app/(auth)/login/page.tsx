@@ -27,8 +27,14 @@ export default function LoginPage() {
       // Redirigir según el rol del usuario
       if (user.role === "SUPER_ADMIN") {
         router.push("/superadmin");
+      } else if (user.role === "ADMIN" && user.companyId) {
+        // Admin de empresa va a su empresa directamente
+        router.push(`/empresa/${user.companyId}`);
       } else if (user.role === "ADMIN") {
         router.push("/admin");
+      } else if (user.role === "AGENCY_SELLER" && user.companyId) {
+        // Vendedor va directamente a la página de su empresa
+        router.push(`/empresa/${user.companyId}`);
       } else if (user.role === "DRIVER") {
         router.push("/driver");
       } else {
