@@ -474,9 +474,6 @@ export default function HomePage() {
           <QuickLink href="/reservas"  icon={<Ticket className="w-5 h-5 text-emerald-400" />}  label="Mis Reservas"  />
           <QuickLink href="/billetera" icon={<Wallet className="w-5 h-5 text-indigo-400" />}   label="Billetera"     />
           <QuickLink href="/mis-viajes" icon={<Clock className="w-5 h-5 text-cyan-400" />}     label="Mis Viajes"    />
-          {user.role === "DRIVER" && (
-            <QuickLink href="/crear-viaje" icon={<Bus className="w-5 h-5 text-purple-400" />}  label="Crear Viaje"   />
-          )}
         </div>
       )}
 

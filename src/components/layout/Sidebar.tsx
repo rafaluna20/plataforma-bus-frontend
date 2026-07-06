@@ -17,7 +17,6 @@ import {
     Route,
     ChevronLeft,
     ChevronRight,
-    PlusCircle,
     Crown,
     Building2,
 } from 'lucide-react';
@@ -58,14 +57,6 @@ export default function Sidebar() {
                 { name: 'Mis Viajes', href: '/mis-viajes', icon: Map, badgeColor: 'blue' as const },
                 { name: 'Mis Reservas', href: '/reservas', icon: Ticket, badge: 1, badgeColor: 'green' as const },
                 { name: 'Billetera', href: '/billetera', icon: Wallet },
-            ]
-        }] : []),
-
-        // ─── CONDUCTOR: visible solo para DRIVER ──────────────────────────────
-        ...(hasRole('DRIVER') ? [{
-            title: 'CONDUCTOR',
-            items: [
-                { name: 'Crear Viaje', href: '/crear-viaje', icon: PlusCircle, badge: 'NUEVO', badgeColor: 'purple' as const },
             ]
         }] : []),
 
