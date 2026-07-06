@@ -1399,20 +1399,27 @@ export default function SeatMapModal({
                 ? { background: "#f59e0b25", color: "#f59e0b", border: "1px solid #f59e0b50" }
                 : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
               <Package className="w-4 h-4 flex-shrink-0" />
-              <span>Encomiendas</span>
+              <span>Encomiendas ({parcels.length})</span>
             </button>
             {/* ── Botón Vendedores (solo ADMIN/SUPER_ADMIN) ── */}
-            {isAdminOnly && (
-              <button
-                onClick={() => setSidebarMode("vendedores")}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full"
-                style={sidebarMode === "vendedores"
-                  ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
-                  : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
-                <Users className="w-4 h-4 flex-shrink-0" />
-                <span>Vendedores</span>
-              </button>
-            )}
+            {isAdminOnly && (() => {
+              // Contar vendedores únicos entre pasajeros y encomiendas
+              const uniqueSellers = new Set<string>();
+              passengers.forEach(p => uniqueSellers.add(p.seller?.id ?? "__sin_vendedor__"));
+              parcels.forEach(p => uniqueSellers.add((p as any).seller?.id ?? "__sin_vendedor__"));
+              const sellerCount = uniqueSellers.size;
+              return (
+                <button
+                  onClick={() => setSidebarMode("vendedores")}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full"
+                  style={sidebarMode === "vendedores"
+                    ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
+                    : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
+                  <Users className="w-4 h-4 flex-shrink-0" />
+                  <span>Vendedores ({sellerCount})</span>
+                </button>
+              );
+            })()}
           </div>
 
           <div className="flex-1 p-3 overflow-y-auto">
