@@ -157,6 +157,16 @@ const paymentStatusLabel: Record<string, { label: string; color: string; bg: str
   CANCELLED:     { label: "Cancelado",        color: "#ef4444", bg: "rgba(239,68,68,0.12)" },
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const formatCity = (name: string) => {
+  if (!name) return "";
+  return name
+    .toLowerCase()
+    .split(" ")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function EmpresaViajeDetailPage() {
   const { slug, tripId } = useParams();
@@ -470,7 +480,7 @@ export default function EmpresaViajeDetailPage() {
               </Link>
               <div className="flex items-center gap-1 text-xs text-slate-500">
                 <ChevronRight className="w-3 h-3" />
-                <span className="truncate">{origin} → {destination}</span>
+                <span className="truncate">{formatCity(origin)} → {formatCity(destination)}</span>
               </div>
             </div>
           </div>
@@ -530,14 +540,22 @@ export default function EmpresaViajeDetailPage() {
               </div>
             </div>
 
-            {/* Título */}
-            <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold text-white">
-                Viaje: {origin} <span className="text-slate-500">→</span> {destination}
-              </h1>
-              <div className="flex items-center gap-2 mt-1">
-                <Bus className="w-4 h-4" style={{ color: primaryColor }} />
-                <span className="text-slate-400 text-sm">{company.tradeName}</span>
+            {/* Título de Ruta Rediseñado */}
+            <div className="space-y-1 bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-sm">
+              <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-slate-400 uppercase">
+                <Bus className="w-3.5 h-3.5" style={{ color: primaryColor }} />
+                <span>Ruta de Servicio</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-[11px] font-bold text-slate-500">{company.tradeName}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-1">
+                <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+                  {formatCity(origin)}
+                </h1>
+                <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
+                <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
+                  {formatCity(destination)}
+                </h1>
               </div>
             </div>
 
@@ -575,8 +593,8 @@ export default function EmpresaViajeDetailPage() {
             {activeTab === "descripcion" && (
               <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-5 space-y-4">
                 <p className="text-slate-300 leading-relaxed">
-                  Viaje de <strong className="text-white">{origin}</strong> a{" "}
-                  <strong className="text-white">{destination}</strong> con{" "}
+                  Viaje de <strong className="text-white">{formatCity(origin)}</strong> a{" "}
+                  <strong className="text-white">{formatCity(destination)}</strong> con{" "}
                   <strong className="text-white">{company.tradeName}</strong>.
                   Salida el{" "}
                   <strong className="text-white">
