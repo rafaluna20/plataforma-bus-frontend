@@ -1019,7 +1019,7 @@ function SaleModal({
                 </div>
               </div>
 
-              {/* Fila selector + número */}
+              {/* Fila selector + número (botón embebido dentro del input) */}
               <div className="flex gap-2">
                 <select value={docType} onChange={e => setDocType(e.target.value)}
                   className="rounded-xl px-2 py-3 text-white text-sm font-semibold focus:outline-none flex-shrink-0"
@@ -1034,27 +1034,27 @@ function SaleModal({
                   <option value="PASAPORTE">Pasaporte</option>
                 </select>
 
-                <input value={docNum} onChange={e => setDocNum(e.target.value)}
-                  placeholder={docType === "DNI" ? "12345678" : docType === "RUC" ? "20123456789" : "Número de documento"}
-                  className="flex-1 rounded-xl px-4 py-3 text-white text-sm font-medium placeholder-slate-500 focus:outline-none transition-colors"
-                  style={{
-                    background: "rgba(15,23,42,0.60)",
-                    border: "1.5px solid rgba(99,102,241,0.35)"
-                  }} />
-
-                <button type="button" onClick={() => handleLookup(docType, docNum)}
-                  disabled={!docNum.trim() || searchingDoc}
-                  className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-bold text-sm transition-all disabled:opacity-40"
-                  style={{
-                    background: searchingDoc ? "rgba(99,102,241,0.30)" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                    color: "white",
-                    boxShadow: searchingDoc ? "none" : "0 4px 14px rgba(99,102,241,0.45)",
-                    minWidth: "52px"
-                  }}>
-                  {searchingDoc
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <Search className="w-4 h-4" />}
-                </button>
+                {/* Input + botón embebido — no desborda en móvil */}
+                <div className="relative flex-1">
+                  <input value={docNum} onChange={e => setDocNum(e.target.value)}
+                    placeholder={docType === "DNI" ? "12345678" : docType === "RUC" ? "20123456789" : "Número de documento"}
+                    className="w-full rounded-xl pl-4 pr-12 py-3 text-white text-sm font-medium placeholder-slate-500 focus:outline-none transition-colors"
+                    style={{
+                      background: "rgba(15,23,42,0.60)",
+                      border: "1.5px solid rgba(99,102,241,0.35)"
+                    }} />
+                  <button type="button" onClick={() => handleLookup(docType, docNum)}
+                    disabled={!docNum.trim() || searchingDoc}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-8 rounded-lg transition-all disabled:opacity-40"
+                    style={{
+                      background: searchingDoc ? "rgba(99,102,241,0.30)" : "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                      boxShadow: searchingDoc ? "none" : "0 2px 8px rgba(99,102,241,0.50)"
+                    }}>
+                    {searchingDoc
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      : <Search className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                </div>
               </div>
 
               {/* Hint auto-búsqueda */}
