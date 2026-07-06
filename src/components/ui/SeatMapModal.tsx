@@ -1186,12 +1186,12 @@ export default function SeatMapModal({
     }
   }, [tripId]);
 
-  // Cargar encomiendas cuando se activa esa pestaña
+  // Cargar encomiendas cuando el modal está abierto para inicializar los contadores
   useEffect(() => {
-    if ((sidebarMode === "encomiendas" || sidebarMode === "vendedores") && open) {
+    if (open) {
       loadParcels();
     }
-  }, [sidebarMode, open, loadParcels]);
+  }, [open, loadParcels]);
 
   // Actualizar estado de encomienda
   const handleParcelStatusChange = async (parcelId: string, newStatus: string) => {
