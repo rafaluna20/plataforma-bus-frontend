@@ -100,11 +100,11 @@ export async function middleware(request: NextRequest) {
       if (role === "SUPER_ADMIN") {
         return NextResponse.redirect(new URL("/superadmin", request.url));
       } else if (role === "ADMIN" && companyId) {
-        return NextResponse.redirect(new URL(`/empresa/${companyId}`, request.url));
+        return NextResponse.redirect(new URL(`/empresa/${companyId}?section=admin-dashboard`, request.url));
       } else if (role === "ADMIN") {
         return NextResponse.redirect(new URL("/admin", request.url));
       } else if (role === "AGENCY_SELLER" && companyId) {
-        return NextResponse.redirect(new URL(`/empresa/${companyId}`, request.url));
+        return NextResponse.redirect(new URL(`/empresa/${companyId}?section=admin-venta`, request.url));
       } else if (role === "DRIVER") {
         return NextResponse.redirect(new URL("/driver", request.url));
       }

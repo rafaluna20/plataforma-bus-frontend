@@ -28,13 +28,13 @@ export default function LoginPage() {
       if (user.role === "SUPER_ADMIN") {
         router.push("/superadmin");
       } else if (user.role === "ADMIN" && user.companyId) {
-        // Admin de empresa va a su empresa directamente
-        router.push(`/empresa/${user.companyId}`);
+        // Admin de empresa va a su dashboard directamente
+        router.push(`/empresa/${user.companyId}?section=admin-dashboard`);
       } else if (user.role === "ADMIN") {
         router.push("/admin");
       } else if (user.role === "AGENCY_SELLER" && user.companyId) {
-        // Vendedor va directamente a la página de su empresa
-        router.push(`/empresa/${user.companyId}`);
+        // Vendedor va directamente a venta de pasajes
+        router.push(`/empresa/${user.companyId}?section=admin-venta`);
       } else if (user.role === "DRIVER") {
         router.push("/driver");
       } else {
