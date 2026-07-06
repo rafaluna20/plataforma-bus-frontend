@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSidebar } from '@/context/SidebarContext';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
@@ -36,8 +36,14 @@ interface NavGroup {
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
     const { isCollapsed, toggleSidebar } = useSidebar();
-    const { hasRole } = useAuth();
+    const { hasRole, logout } = useAuth();
+
+    async function handleLogout() {
+        await logout();
+        router.push('/login');
+    }
 
     const navigationGroups: NavGroup[] = [
         // ─── GENERAL: visible para todos ─────────────────────────────────────
@@ -159,7 +165,10 @@ export default function Sidebar() {
             <div className="p-4 border-t border-slate-800/50 relative z-10 bg-slate-900/50">
                 <div className={cn("flex", isCollapsed ? "justify-center" : "justify-between items-center")}>
                     {!isCollapsed && (
-                        <button className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors px-2 py-2 rounded-lg hover:bg-rose-500/10">
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-2 text-sm text-slate-400 hover:text-rose-400 transition-colors px-2 py-2 rounded-lg hover:bg-rose-500/10"
+                        >
                             <LogOut className="w-4 h-4" />
                             <span className="font-medium">Cerrar Sesión</span>
                         </button>
