@@ -3,13 +3,11 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
   AuthUser,
-  getCurrentUser,
   login as authLogin,
   logout as authLogout,
   register as authRegister,
   fetchProfile,
   refreshAccessToken,
-  syncSessionCookie,
 } from "@/lib/auth";
 
 interface AuthContextType {
@@ -43,26 +41,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const serverUser = await fetchProfile();
     if (serverUser) {
       setUser(serverUser);
-      // Asegurar que la cookie access_token (leída por el middleware) esté sincronizada
-      syncSessionCookie();
       return;
     }
 
-    // Si falla (token expirado), intentar renovar el token
-    const newToken = await refreshAccessToken();
-    if (newToken) {
+    // Si falla (access token expirado), intentar renovar la sesión
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
       const refreshedUser = await fetchProfile();
-      if (refreshedUser) {
-        setUser(refreshedUser);
-        syncSessionCookie();
-      } else {
-        setUser(null);
-      }
+      setUser(refreshedUser);
       return;
     }
 
-    // Si no hay token válido, limpiar la cookie y el estado
-    syncSessionCookie();
     setUser(null);
   }, []);
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 // Rutas que requieren autenticación
 const PROTECTED_ROUTES = ["/admin", "/driver", "/booking", "/superadmin", "/empresa"];
@@ -25,28 +26,35 @@ interface SessionPayload {
 }
 
 /**
- * Verifica la firma y vigencia del access token (cookie `access_token`, no
- * httpOnly — el mismo JWT que ya vive en localStorage, solo espejado para que
- * el middleware pueda leerlo). Antes esta función confiaba en una cookie
- * `session_role` de puro texto que cualquiera podía escribir desde devtools
- * (`document.cookie = "session_role=SUPER_ADMIN"`) para saltarse el gate de
- * /admin, /superadmin y /driver. Un token con firma inválida o expirada se
- * trata como "no autenticado".
+ * Verifica la sesión llamando a GET /api/v1/auth/me en el backend, reenviando
+ * las cookies de la petición entrante. El access token vive en una cookie
+ * httpOnly puesta por el backend (dominio distinto al del frontend), así que
+ * el middleware no puede decodificarla localmente — solo el backend puede
+ * validarla. Cualquier fallo (sin cookie, token inválido/expirado, timeout,
+ * backend caído) se trata como "no autenticado" (fail-closed): antes esta
+ * función confiaba en una cookie `session_role` de puro texto que cualquiera
+ * podía escribir desde devtools para saltarse el gate de /admin, /superadmin
+ * y /driver.
  */
 async function verifySession(request: NextRequest): Promise<SessionPayload | null> {
-  const token = request.cookies.get("access_token")?.value;
-  if (!token) return null;
-
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    console.error("[middleware] JWT_SECRET no configurado — denegando por defecto.");
-    return null;
-  }
+  const cookieHeader = request.headers.get("cookie");
+  if (!cookieHeader) return null;
 
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
-    if (typeof payload.role !== "string") return null;
-    return { role: payload.role };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+    const res = await fetch(`${API_URL}/api/v1/auth/me`, {
+      headers: { cookie: cookieHeader },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return null;
+
+    const user = await res.json();
+    if (typeof user?.role !== "string") return null;
+    return { role: user.role };
   } catch {
     return null;
   }

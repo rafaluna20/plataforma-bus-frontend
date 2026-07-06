@@ -24,10 +24,6 @@ export default function LoginPage() {
     try {
       const user = await login(email, password);
 
-      // Esperar un tick para que la cookie access_token se establezca
-      // antes de que el middleware de Next.js evalúe la redirección
-      await new Promise(resolve => setTimeout(resolve, 100));
-
       // Redirigir según el rol del usuario
       if (user.role === "SUPER_ADMIN") {
         router.push("/superadmin");

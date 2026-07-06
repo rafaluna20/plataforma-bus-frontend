@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
 import { API_URL } from "@/lib/config";
-import { getAccessToken } from "@/lib/auth";
 import { Navigation, Wifi, WifiOff, Loader2, MapPin, Gauge, Clock } from "lucide-react";
 
 type LocationData = {
@@ -145,7 +144,7 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 2000,
-      auth: { token: getAccessToken() },
+      withCredentials: true, // envía la cookie httpOnly access_token en el handshake
     });
 
     socketRef.current = socket;

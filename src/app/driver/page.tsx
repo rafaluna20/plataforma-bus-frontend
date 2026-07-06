@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { Play, Square, Users, MapPin, Activity, Navigation, Bus, ArrowRight, Loader2, CheckCircle2 } from "lucide-react";
-import { getAccessToken, getCurrentUser, type AuthUser } from "@/lib/auth";
+import { getCurrentUser, type AuthUser } from "@/lib/auth";
 import { getMyDriverTrips, getTripManifest, updateTripStatus } from "@/lib/api/trips";
 
 type AssignedTrip = {
@@ -85,7 +85,7 @@ export default function DriverPanel() {
   // ── Socket ───────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentUser) return;
-    socketRef.current = io(API_URL, { auth: { token: getAccessToken() } });
+    socketRef.current = io(API_URL, { withCredentials: true });
     socketRef.current.on("connect", () => setIsConnected(true));
     socketRef.current.on("disconnect", () => setIsConnected(false));
     socketRef.current.on("error", (err: { message: string }) => {
@@ -114,15 +114,13 @@ export default function DriverPanel() {
         const speedKmH = speed ? Math.round(speed * 3.6) : 0;
         setGpsData({ lat: latitude, lng: longitude, speed: speedKmH });
 
-        const token = getAccessToken();
-        if (socketRef.current?.connected && token) {
+        if (socketRef.current?.connected) {
           socketRef.current.emit("driver_update_location", {
             tripId: selectedTripId,
             lat: latitude,
             lng: longitude,
             speed: speedKmH,
             bearing: heading || 0,
-            token,
           });
         }
       },

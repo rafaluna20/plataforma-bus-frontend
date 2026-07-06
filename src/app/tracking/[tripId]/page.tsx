@@ -5,7 +5,6 @@ import Map, { Marker, NavigationControl } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { io, Socket } from "socket.io-client";
 import { Bus, Navigation, Clock, Activity, DoorOpen, X } from "lucide-react";
-import { getAccessToken } from "@/lib/auth";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
@@ -30,7 +29,7 @@ export default function TrackingPage({ params }: { params: Promise<{ tripId: str
 
   useEffect(() => {
     // 1. Conectar al WebSocket
-    const socket: Socket = io(SOCKET_URL, { auth: { token: getAccessToken() } });
+    const socket: Socket = io(SOCKET_URL, { withCredentials: true });
 
     socket.on("connect", () => {
       setIsConnected(true);

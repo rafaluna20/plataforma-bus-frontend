@@ -14,7 +14,6 @@
     "@types/mapbox-gl": "^3.4.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
-    "jose": "^6.2.3",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.21.0",
     "mapbox-gl": "^3.25.0",
