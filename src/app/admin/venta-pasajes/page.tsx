@@ -8,8 +8,8 @@ import {
   RefreshCw, MapPin, ArrowRight, X
 } from "lucide-react";
 import { fetchProfile } from "@/lib/auth";
-import { searchTrips, getTripDetail } from "@/lib/api/trips";
-import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
+import { searchTrips } from "@/lib/api/trips";
+import { useTripDetail, useCreateBooking } from "@/lib/queries/trips";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -69,8 +69,9 @@ export default function VentaPasajesPage() {
 
   // Viaje seleccionado
   const [selectedTrip, setSelectedTrip] = useState<TripItem | null>(null);
-  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
-  const [loadingTrip, setLoadingTrip] = useState(false);
+  const { data: tripDetailData, isLoading: loadingTrip } = useTripDetail(selectedTrip?.id);
+  const occupiedSeats: string[] = tripDetailData?.occupiedSeats || [];
+  const createBooking = useCreateBooking(selectedTrip?.id);
 
   // Asiento seleccionado
   const [selectedSeat, setSelectedSeat] = useState<string>("");
@@ -87,7 +88,6 @@ export default function VentaPasajesPage() {
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "digital">("cash");
 
   // Estado de reserva
-  const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState("");
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null);
 
@@ -122,24 +122,24 @@ export default function VentaPasajesPage() {
     }
   }
 
-  async function selectTrip(trip: TripItem) {
+  function selectTrip(trip: TripItem) {
     setSelectedTrip(trip);
     setSelectedSeat("");
     setReceipt(null);
     setBookingError("");
-    setLoadingTrip(true);
-
-    try {
-      const data = await getTripDetail<any>(trip.id);
-      setOccupiedSeats(data.occupiedSeats || []);
-      const wps = data.trip?.route?.waypoints || trip.route.waypoints;
-      if (wps.length >= 2) {
-        setStartWaypointId(wps[0].id);
-        setEndWaypointId(wps[wps.length - 1].id);
-      }
-    } catch { }
-    finally { setLoadingTrip(false); }
+    setStartWaypointId("");
+    setEndWaypointId("");
   }
+
+  // Pre-seleccionar primer y último waypoint apenas llega el detalle del viaje
+  useEffect(() => {
+    const wps = tripDetailData?.trip?.route?.waypoints || selectedTrip?.route.waypoints || [];
+    if (wps.length >= 2 && !startWaypointId && !endWaypointId) {
+      setStartWaypointId(wps[0].id);
+      setEndWaypointId(wps[wps.length - 1].id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tripDetailData, selectedTrip?.id]);
 
   // Calcular precio del tramo
   function calcPrice(): number {
@@ -179,30 +179,25 @@ export default function VentaPasajesPage() {
       return;
     }
 
-    setBooking(true);
     setBookingError("");
 
+    const body: any = {
+      tripId: selectedTrip.id,
+      passengerName: passengerName.trim(),
+      passengerDocType,
+      passengerDocNum: passengerDocNum.trim(),
+      startWaypointId,
+      endWaypointId,
+      seatId: selectedSeat,
+    };
+
+    if (paymentMethod === "digital") {
+      body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
+    }
+
     try {
-      const body: any = {
-        tripId: selectedTrip.id,
-        passengerName: passengerName.trim(),
-        passengerDocType,
-        passengerDocNum: passengerDocNum.trim(),
-        startWaypointId,
-        endWaypointId,
-        seatId: selectedSeat,
-      };
-
-      if (paymentMethod === "digital") {
-        body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
-      }
-
-      const data = paymentMethod === "cash"
-        ? await createCashBooking<any>(body)
-        : await createDigitalBooking<any>(body);
-
+      const data = await createBooking.mutateAsync({ method: paymentMethod, body });
       setReceipt(data.booking);
-      setOccupiedSeats(prev => [...prev, selectedSeat]);
       setSelectedSeat("");
       // Limpiar formulario para siguiente venta
       setPassengerName("");
@@ -210,8 +205,6 @@ export default function VentaPasajesPage() {
       setPassengerPhone("");
     } catch (e: any) {
       setBookingError(e.message);
-    } finally {
-      setBooking(false);
     }
   }
 
@@ -586,9 +579,9 @@ export default function VentaPasajesPage() {
                   )}
 
                   {/* Botón registrar venta */}
-                  <button type="submit" disabled={booking}
+                  <button type="submit" disabled={createBooking.isPending}
                     className="w-full py-3 rounded-xl font-bold text-white text-sm gradient-btn disabled:opacity-50 flex items-center justify-center gap-2">
-                    {booking ? (
+                    {createBooking.isPending ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Registrando venta...</>
                     ) : (
                       <><CheckCircle2 className="w-4 h-4" />

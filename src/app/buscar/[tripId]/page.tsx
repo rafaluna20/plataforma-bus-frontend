@@ -8,8 +8,7 @@ import {
   CheckCircle2, AlertCircle, Share2, Heart, ChevronRight,
   Loader2, CreditCard, Banknote, Phone
 } from "lucide-react";
-import { getTripDetail } from "@/lib/api/trips";
-import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
+import { useTripDetail, useCreateBooking } from "@/lib/queries/trips";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -77,11 +76,14 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 export default function TripDetailPage() {
   const { tripId } = useParams();
   const router = useRouter();
+  const id = Array.isArray(tripId) ? tripId[0] : tripId;
 
-  const [trip, setTrip] = useState<TripDetail | null>(null);
-  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, isLoading: loading, error: queryError } = useTripDetail(id);
+  const trip: TripDetail | null = data?.trip ?? null;
+  const occupiedSeats: string[] = data?.occupiedSeats || [];
+  const error = queryError ? (queryError as Error).message : "";
+
+  const createBooking = useCreateBooking(id);
 
   // Selección de asientos
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
@@ -98,34 +100,18 @@ export default function TripDetailPage() {
   const [passengerDocNum, setPassengerDocNum] = useState("");
   const [passengerPhone, setPassengerPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "digital">("cash");
-  const [booking, setBooking] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState<any>(null);
   const [bookingError, setBookingError] = useState("");
 
+  // Pre-seleccionar primer y último waypoint apenas llega el detalle del viaje
   useEffect(() => {
-    loadTrip();
-  }, [tripId]);
-
-  async function loadTrip() {
-    setLoading(true);
-    try {
-      const id = Array.isArray(tripId) ? tripId[0] : tripId;
-      const data = await getTripDetail<any>(id as string);
-      setTrip(data.trip);
-      setOccupiedSeats(data.occupiedSeats || []);
-
-      // Pre-seleccionar primer y último waypoint
-      const wps = data.trip.route?.waypoints || [];
-      if (wps.length >= 2) {
-        setStartWaypointId(wps[0].id);
-        setEndWaypointId(wps[wps.length - 1].id);
-      }
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
+    const wps = trip?.route?.waypoints || [];
+    if (wps.length >= 2 && !startWaypointId && !endWaypointId) {
+      setStartWaypointId(wps[0].id);
+      setEndWaypointId(wps[wps.length - 1].id);
     }
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trip?.id]);
 
   function toggleSeat(seatId: string) {
     if (occupiedSeats.includes(seatId)) return;
@@ -164,36 +150,29 @@ export default function TripDetailPage() {
       return;
     }
 
-    setBooking(true);
     setBookingError("");
 
+    const body: any = {
+      tripId: trip.id,
+      passengerName: passengerName.trim(),
+      passengerDocType,
+      passengerDocNum: passengerDocNum.trim(),
+      startWaypointId,
+      endWaypointId,
+      seatId: selectedSeats[0], // Por ahora 1 asiento por reserva
+    };
+
+    if (paymentMethod === "digital") {
+      body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
+    }
+
     try {
-      const body: any = {
-        tripId: trip.id,
-        passengerName: passengerName.trim(),
-        passengerDocType,
-        passengerDocNum: passengerDocNum.trim(),
-        startWaypointId,
-        endWaypointId,
-        seatId: selectedSeats[0], // Por ahora 1 asiento por reserva
-      };
-
-      if (paymentMethod === "digital") {
-        body.paymentDetails = { method: "YAPE", phoneNumber: passengerPhone };
-      }
-
-      const data = paymentMethod === "cash"
-        ? await createCashBooking<any>(body)
-        : await createDigitalBooking<any>(body);
-
+      const data = await createBooking.mutateAsync({ method: paymentMethod, body });
       setBookingSuccess(data.booking);
-      setOccupiedSeats(prev => [...prev, selectedSeats[0]]);
       setSelectedSeats([]);
       setShowForm(false);
     } catch (e: any) {
       setBookingError(e.message);
-    } finally {
-      setBooking(false);
     }
   }
 
@@ -808,10 +787,10 @@ export default function TripDetailPage() {
                     </div>
                   )}
 
-                  <button type="submit" disabled={booking}
+                  <button type="submit" disabled={createBooking.isPending}
                     className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
                     style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-                    {booking ? (
+                    {createBooking.isPending ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
                     ) : (
                       <><CheckCircle2 className="w-4 h-4" /> Confirmar Reserva</>

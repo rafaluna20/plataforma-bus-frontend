@@ -15,7 +15,8 @@ import EmpresaBottomNav from "@/components/layout/EmpresaBottomNav";
 import { calcTripPrice, calcTripPriceRange } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
-import { getTripDetail, getTripManifest, updateTripStatus } from "@/lib/api/trips";
+import { getTripDetail, updateTripStatus } from "@/lib/api/trips";
+import { useTripManifest } from "@/lib/queries/trips";
 import { getParcelsByTrip } from "@/lib/api/parcels";
 import dynamic from "next/dynamic";
 
@@ -166,7 +167,6 @@ export default function EmpresaViajeDetailPage() {
 
   const [company, setCompany]             = useState<CompanyPublic | null>(null);
   const [trip, setTrip]                   = useState<TripDetail | null>(null);
-  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState("");
   const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa">("descripcion");
@@ -189,13 +189,20 @@ export default function EmpresaViajeDetailPage() {
     }
   }, []);
 
-  // ─── Estado para la lista de pasajeros ───────────────────────────────────────
-  const [passengers, setPassengers]         = useState<Passenger[]>([]);
-  const [loadingPassengers, setLoadingPassengers] = useState(false);
-  const [passengersError, setPassengersError]     = useState("");
+  // ─── Manifiesto de pasajeros / asientos ocupados ──────────────────────────────
+  // Misma clave de caché que usa SeatMapModal (y las pantallas de venta pública
+  // y mostrador para el detalle del viaje) — vender un asiento en cualquiera de
+  // ellas invalida esta consulta y aquí se refresca sola, sin estado manual.
+  const {
+    data: manifestData,
+    isLoading: loadingPassengers,
+    error: passengersQueryError,
+    refetch: loadPassengers,
+  } = useTripManifest(tripIdStr || undefined);
+  const passengers: Passenger[] = manifestData?.passengers || [];
+  const occupiedSeats: string[] = useMemo(() => passengers.map(p => p.seatId), [passengers]);
+  const passengersError = passengersQueryError ? (passengersQueryError as Error).message : "";
   const [passengerSearch, setPassengerSearch]     = useState("");
-  // Contador real de pasajeros (desde el manifiesto)
-  const [passengerCount, setPassengerCount] = useState<number | null>(null);
 
   // ─── Estado para encomiendas ──────────────────────────────────────────────────
   const [parcels, setParcels]               = useState<Parcel[]>([]);
@@ -232,18 +239,6 @@ export default function EmpresaViajeDetailPage() {
       if (wps.length >= 2) {
         setStartWaypointId(wps[0].id);
         setEndWaypointId(wps[wps.length - 1].id);
-      }
-
-      // Pre-cargar conteo real de pasajeros y asientos ocupados
-      try {
-        const manifestData = await getTripManifest<any>(tripIdStr);
-        if (manifestData.passengers) {
-          setPassengers(manifestData.passengers);
-          setPassengerCount(manifestData.passengers.length);
-          setOccupiedSeats(manifestData.passengers.map((p: Passenger) => p.seatId));
-        }
-      } catch (err) {
-        console.error("Error preloading manifest:", err);
       }
 
       // Pre-cargar encomiendas (solo para ADMIN / SUPER_ADMIN)
@@ -285,27 +280,6 @@ export default function EmpresaViajeDetailPage() {
     }
   }
 
-  // ─── Carga de pasajeros (manifiesto) ─────────────────────────────────────────
-  const loadPassengers = useCallback(async () => {
-    if (!tripIdStr) return;
-    setLoadingPassengers(true);
-    setPassengersError("");
-    try {
-      const data = await getTripManifest<any>(tripIdStr);
-      const list = data.passengers || [];
-      setPassengers(list);
-      // Actualizar el contador real y los asientos ocupados con los datos del manifiesto
-      setPassengerCount(list.length);
-      if (list.length > 0) {
-        setOccupiedSeats(list.map((p: Passenger) => p.seatId));
-      }
-    } catch (e: any) {
-      setPassengersError(e.message);
-    } finally {
-      setLoadingPassengers(false);
-    }
-  }, [tripIdStr]);
-
   // ─── Carga de encomiendas ─────────────────────────────────────────────────────
   const loadParcels = useCallback(async () => {
     if (!tripIdStr) return;
@@ -321,22 +295,13 @@ export default function EmpresaViajeDetailPage() {
     }
   }, [tripIdStr]);
 
-  // Cargar pasajeros cuando se activa la pestaña
+  // Cargar encomiendas cuando se activa la pestaña (los pasajeros ya se cargan
+  // solos vía useTripManifest, y se refrescan automáticamente tras cada venta)
   useEffect(() => {
-    if (activeTab === "pasajeros") {
-      loadPassengers();
-    }
     if (activeTab === "encomiendas") {
       loadParcels();
     }
-  }, [activeTab, loadPassengers, loadParcels]);
-
-  // También recargar pasajeros cuando se registra una venta exitosa
-  useEffect(() => {
-    if (bookingSuccess && activeTab === "pasajeros") {
-      loadPassengers();
-    }
-  }, [bookingSuccess]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeTab, loadParcels]);
 
   // ─── Precio calculado (memoizado, usa función centralizada) ──────────────────
   const pricePerSeat = useMemo(() => {
@@ -380,6 +345,15 @@ export default function EmpresaViajeDetailPage() {
 
   // ─── Pestañas dinámicas (DEBE estar antes de los early returns) ───────────────
   const waypointsLength = trip?.route?.waypoints?.length || 0;
+
+  // Conteo de vendedores únicos (pasajeros + encomiendas)
+  const uniqueSellerCount = useMemo(() => {
+    const ids = new Set<string>();
+    passengers.forEach(p => { if (p.seller?.id) ids.add(p.seller.id); });
+    parcels.forEach(p => { if ((p as any).seller?.id) ids.add((p as any).seller.id); });
+    return ids.size;
+  }, [passengers, parcels]);
+
   const tabs = useMemo(() => {
     const list: Array<{ id: "descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa"; label: string }> = [
       { id: "descripcion",  label: "Descripción" },
@@ -395,12 +369,12 @@ export default function EmpresaViajeDetailPage() {
     }
     if (isAdminOrSuper) {
       list.push({ id: "encomiendas" as const, label: `Encomiendas (${parcels.length})` });
-      list.push({ id: "vendedores" as const, label: "Vendedores" });
+      list.push({ id: "vendedores" as const, label: `Vendedores (${uniqueSellerCount})` });
     }
 
     list.push({ id: "mapa" as const, label: "Mapa" });
     return list;
-  }, [waypointsLength, occupiedSeats.length, parcels.length, currentUser]);
+  }, [waypointsLength, occupiedSeats.length, parcels.length, uniqueSellerCount, currentUser]);
 
 
   // ─── Loading / Error ─────────────────────────────────────────────────────────
@@ -728,7 +702,7 @@ export default function EmpresaViajeDetailPage() {
                     </p>
                   </div>
                   <button
-                    onClick={loadPassengers}
+                    onClick={() => loadPassengers()}
                     disabled={loadingPassengers}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-all disabled:opacity-50"
                   >
@@ -1369,7 +1343,7 @@ export default function EmpresaViajeDetailPage() {
                   className="w-full py-2.5 rounded-xl font-semibold text-sm transition-all hover:opacity-90 flex items-center justify-center gap-2 border border-white/10 text-slate-300 hover:text-white hover:border-white/20"
                 >
                   <Users className="w-4 h-4" />
-                  Ver lista de pasajeros ({occupiedSeats.length})
+                  Pasajeros ({occupiedSeats.length}) · Encom. ({parcels.length}) · Vend. ({uniqueSellerCount})
                 </button>
 
                 {/* Acceso rápido a encomiendas */}
@@ -1454,9 +1428,9 @@ export default function EmpresaViajeDetailPage() {
         departureTime={trip.departureTime}
         plateNumber={vehicle.plateNumber || undefined}
         onSaleSuccess={(receipt) => {
-          setOccupiedSeats(prev => [...prev, receipt.seatId]);
+          // No hace falta tocar pasajeros/asientos a mano: la venta ya invalidó
+          // la consulta compartida del manifiesto, se refresca sola.
           setBookingSuccess(receipt);
-          if (activeTab === "pasajeros") loadPassengers();
         }}
       />
 

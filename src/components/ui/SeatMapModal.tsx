@@ -8,8 +8,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { calcTripPrice } from "@/lib/config";
-import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
-import { getTripManifest } from "@/lib/api/trips";
+import { useCreateBooking, useTripManifest } from "@/lib/queries/trips";
 import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
@@ -803,7 +802,6 @@ function SaleModal({
   const [payMethod, setPayMethod] = useState<"cash" | "digital">("cash");
   const [startWpId, setStartWpId] = useState(waypoints[0]?.id || "");
   const [endWpId, setEndWpId] = useState(waypoints[waypoints.length - 1]?.id || "");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<any>(null);
   const [ticketOpen, setTicketOpen] = useState(false);
@@ -811,6 +809,7 @@ function SaleModal({
   const [savedDoc, setSavedDoc] = useState("");
   const [savedStartWpId, setSavedStartWpId] = useState("");
   const [savedEndWpId, setSavedEndWpId] = useState("");
+  const createBooking = useCreateBooking(tripId);
 
   useEffect(() => {
     if (open) {
@@ -830,17 +829,15 @@ function SaleModal({
     e.preventDefault();
     if (!name.trim() || !docNum.trim()) { setError("Nombre y documento son obligatorios."); return; }
     if (startWpId === endWpId) { setError("El origen y destino deben ser diferentes."); return; }
-    setLoading(true); setError("");
+    setError("");
+    const body: any = {
+      tripId, passengerName: name.trim(), passengerDocType: docType,
+      passengerDocNum: docNum.trim(), startWaypointId: startWpId,
+      endWaypointId: endWpId, seatId,
+    };
+    if (payMethod === "digital") body.paymentDetails = { method: "YAPE", phoneNumber: phone };
     try {
-      const body: any = {
-        tripId, passengerName: name.trim(), passengerDocType: docType,
-        passengerDocNum: docNum.trim(), startWaypointId: startWpId,
-        endWaypointId: endWpId, seatId,
-      };
-      if (payMethod === "digital") body.paymentDetails = { method: "YAPE", phoneNumber: phone };
-      const data = payMethod === "cash"
-        ? await createCashBooking<any>(body)
-        : await createDigitalBooking<any>(body);
+      const data = await createBooking.mutateAsync({ method: payMethod, body });
       // Guardar datos del pasajero para el ticket antes de limpiar el form
       setSavedName(name.trim());
       setSavedDoc(docNum.trim());
@@ -851,8 +848,6 @@ function SaleModal({
       onSuccess(data.booking);
     } catch (err: any) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -1030,13 +1025,13 @@ function SaleModal({
               </div>
             )}
 
-            <button type="submit" disabled={loading}
+            <button type="submit" disabled={createBooking.isPending}
               className="w-full py-3.5 rounded-2xl font-extrabold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all hover:opacity-90"
               style={{
                 background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
                 boxShadow: `0 8px 24px ${primaryColor}40`,
               }}>
-              {loading
+              {createBooking.isPending
                 ? <><Loader2 className="w-4 h-4 animate-spin" /> Registrando...</>
                 : <><CheckCircle2 className="w-4 h-4" /> Confirmar Venta — S/ {displayPrice}</>}
             </button>
@@ -1063,7 +1058,6 @@ export default function SeatMapModal({
     [isTwoDeck, vehicleCapacity]
   );
 
-  const [occupied, setOccupied] = useState<string[]>(initialOccupied);
   const [selectedSeat, setSelectedSeat] = useState<string>("");
   const [selectedSeatFloor, setSelectedSeatFloor] = useState<0 | 1 | 2>(0);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
@@ -1071,10 +1065,21 @@ export default function SeatMapModal({
   const [editMode, setEditMode] = useState(false);
   const [seatLabels, setSeatLabels] = useState<Record<string, string>>(defaultLabels);
 
-  // ─── Estado para lista de pasajeros en sidebar ────────────────────────────
-  const [passengers, setPassengers] = useState<ManifestPassenger[]>([]);
-  const [loadingPassengers, setLoadingPassengers] = useState(false);
-  const [passengersError, setPassengersError] = useState("");
+  // ─── Lista de pasajeros en sidebar — misma cache que el detalle del viaje;
+  // vender un asiento aquí (o en cualquier otra pantalla que use este mismo
+  // tripId) invalida esta consulta y ambos lados se refrescan solos.
+  const {
+    data: manifestData,
+    isLoading: loadingPassengers,
+    error: passengersQueryError,
+    refetch: loadPassengers,
+  } = useTripManifest(open ? tripId : undefined);
+  const passengers: ManifestPassenger[] = manifestData?.passengers || [];
+  const passengersError = passengersQueryError ? (passengersQueryError as Error).message : "";
+  const occupied = useMemo(
+    () => (manifestData?.passengers ? manifestData.passengers.map((p: ManifestPassenger) => p.seatId) : initialOccupied),
+    [manifestData, initialOccupied]
+  );
 
   // ─── Estado para lista de encomiendas en sidebar ──────────────────────────
   const [parcels, setParcels] = useState<ManifestParcel[]>([]);
@@ -1135,8 +1140,6 @@ export default function SeatMapModal({
     );
   };
 
-  useEffect(() => { setOccupied(initialOccupied); }, [initialOccupied]);
-
   useEffect(() => {
     if (open) {
       document.body.style.overflow = "hidden";
@@ -1167,28 +1170,6 @@ export default function SeatMapModal({
   const handleLabelChange = useCallback((id: string, val: string) => {
     setSeatLabels(prev => ({ ...prev, [id]: val }));
   }, []);
-
-  // ─── Carga de pasajeros ───────────────────────────────────────────────────
-  const loadPassengers = useCallback(async () => {
-    if (!tripId) return;
-    setLoadingPassengers(true);
-    setPassengersError("");
-    try {
-      const data = await getTripManifest<any>(tripId);
-      setPassengers(data.passengers || []);
-    } catch (e: any) {
-      setPassengersError(e.message);
-    } finally {
-      setLoadingPassengers(false);
-    }
-  }, [tripId]);
-
-  // Cargar pasajeros al abrir el modal o cambiar de pestaña
-  useEffect(() => {
-    if (open) {
-      loadPassengers();
-    }
-  }, [sidebarMode, open, loadPassengers]);
 
   // ─── Carga de encomiendas ─────────────────────────────────────────────────
   const loadParcels = useCallback(async () => {
@@ -1238,14 +1219,11 @@ export default function SeatMapModal({
   }, [parcels, parcelSearch]);
 
   const handleSaleSuccess = useCallback((booking: any) => {
-    setOccupied(prev => [...prev, booking.seatId ?? selectedSeat]);
-    // No cerrar el modal de venta aquí — el ticket se muestra dentro de SaleModal
+    // No cerrar el modal de venta aquí — el ticket se muestra dentro de SaleModal.
+    // No hace falta actualizar "occupied" a mano: la mutación de venta ya invalidó
+    // la consulta del manifiesto, así que se refresca sola con el dato real del servidor.
     onSaleSuccess?.(booking);
-    // Recargar lista si está visible
-    if (sidebarMode === "pasajeros") {
-      loadPassengers();
-    }
-  }, [selectedSeat, onSaleSuccess, sidebarMode, loadPassengers]);
+  }, [onSaleSuccess]);
 
   const handleSaveLabels = useCallback(() => setEditMode(false), []);
 
@@ -1527,7 +1505,7 @@ export default function SeatMapModal({
                       <Printer className="w-3.5 h-3.5" />
                     </button>
                     <button
-                      onClick={loadPassengers}
+                      onClick={() => loadPassengers()}
                       disabled={loadingPassengers}
                       className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
                       title="Actualizar"
@@ -1893,7 +1871,7 @@ export default function SeatMapModal({
           </div>
 
           {/* Contenedor que escala el bus para ocupar el 80% del ancho disponible */}
-          <div className="w-full flex-1 flex flex-col items-center justify-start gap-6 overflow-auto">
+          <div className="w-full flex-1 flex flex-col items-center justify-start gap-2 overflow-auto">
 
             {/* Piso 2 */}
             {isTwoDeck && (
@@ -1907,7 +1885,7 @@ export default function SeatMapModal({
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
                 <div className="w-full overflow-x-auto flex justify-start lg:justify-center">
-                  <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "15px" }}>
+                  <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "2px" }}>
                     <BusMap {...busMapProps} floor={2} />
                   </div>
                 </div>
@@ -1951,7 +1929,7 @@ export default function SeatMapModal({
                   <Printer className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={loadPassengers}
+                  onClick={() => loadPassengers()}
                   disabled={loadingPassengers}
                   className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
                   title="Actualizar"
