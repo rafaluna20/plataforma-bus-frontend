@@ -88,12 +88,31 @@ export async function middleware(request: NextRequest) {
 
   // Si está autenticado y va a login/register → redirigir según rol
   if (isAuthRoute && isAuthenticated) {
-    if (role === "SUPER_ADMIN") {
-      return NextResponse.redirect(new URL("/superadmin", request.url));
-    } else if (role === "ADMIN") {
-      return NextResponse.redirect(new URL("/admin", request.url));
-    } else if (role === "DRIVER") {
-      return NextResponse.redirect(new URL("/driver", request.url));
+    try {
+      // Obtener el perfil completo para conocer el companyId
+      const cookieHeader = request.headers.get("cookie") || "";
+      const profileRes = await fetch(`${API_URL}/api/v1/auth/me`, {
+        headers: { cookie: cookieHeader },
+      });
+      const fullUser = profileRes.ok ? await profileRes.json() : null;
+      const companyId = fullUser?.companyId;
+
+      if (role === "SUPER_ADMIN") {
+        return NextResponse.redirect(new URL("/superadmin", request.url));
+      } else if (role === "ADMIN" && companyId) {
+        return NextResponse.redirect(new URL(`/empresa/${companyId}`, request.url));
+      } else if (role === "ADMIN") {
+        return NextResponse.redirect(new URL("/admin", request.url));
+      } else if (role === "AGENCY_SELLER" && companyId) {
+        return NextResponse.redirect(new URL(`/empresa/${companyId}`, request.url));
+      } else if (role === "DRIVER") {
+        return NextResponse.redirect(new URL("/driver", request.url));
+      }
+    } catch {
+      // Si falla obtener el perfil, redirigir según el rol básico
+      if (role === "SUPER_ADMIN") return NextResponse.redirect(new URL("/superadmin", request.url));
+      if (role === "ADMIN") return NextResponse.redirect(new URL("/admin", request.url));
+      if (role === "DRIVER") return NextResponse.redirect(new URL("/driver", request.url));
     }
     return NextResponse.redirect(new URL("/", request.url));
   }
