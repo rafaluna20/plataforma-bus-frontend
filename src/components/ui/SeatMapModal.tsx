@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback, useMemo, memo, type ReactNode } from 
 import {
   X, CheckCircle2, AlertCircle, Loader2,
   Banknote, CreditCard, ArrowRight, Pencil, Package, TicketCheck, Save, RotateCcw,
-  Users, RefreshCw, MapPin, Printer
+  Users, RefreshCw, MapPin, Printer, Search
 } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
-import { calcTripPrice } from "@/lib/config";
+import { getCurrentUser, authFetch } from "@/lib/auth";
+import { calcTripPrice, API_URL } from "@/lib/config";
 import { useCreateBooking, useTripManifest } from "@/lib/queries/trips";
 import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
 import TicketModal from "@/components/trips/TicketModal";
@@ -811,6 +811,38 @@ function SaleModal({
   const [savedEndWpId, setSavedEndWpId] = useState("");
   const createBooking = useCreateBooking(tripId);
 
+  const [searchingDoc, setSearchingDoc] = useState(false);
+
+  const handleLookup = useCallback(async (type: string, num: string) => {
+    const cleanNum = num.trim();
+    if (!cleanNum) return;
+    setSearchingDoc(true);
+    try {
+      const res = await authFetch(`${API_URL}/api/v1/bookings/passenger/lookup?docType=${type}&docNum=${cleanNum}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.name) {
+          setName(data.name);
+          if (data.phone) setPhone(data.phone);
+        }
+      }
+    } catch (err) {
+      console.error("Error looking up passenger:", err);
+    } finally {
+      setSearchingDoc(false);
+    }
+  }, [setName, setPhone]);
+
+  // Auto-trigger lookup
+  useEffect(() => {
+    const cleanNum = docNum.trim();
+    if (docType === "DNI" && cleanNum.length === 8) {
+      handleLookup("DNI", cleanNum);
+    } else if (docType === "RUC" && cleanNum.length === 11) {
+      handleLookup("RUC", cleanNum);
+    }
+  }, [docNum, docType, handleLookup]);
+
   useEffect(() => {
     if (open) {
       setName(""); setDocNum(""); setPhone(""); setError(""); setReceipt(null);
@@ -981,15 +1013,30 @@ function SaleModal({
                 <select value={docType} onChange={e => setDocType(e.target.value)}
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-2 py-2.5 text-white text-xs focus:outline-none">
                   <option value="DNI">DNI</option>
+                  <option value="RUC">RUC</option>
                   <option value="CE">CE</option>
                   <option value="PASAPORTE">Pasaporte</option>
                 </select>
               </div>
               <div className="col-span-2">
                 <label className="text-xs text-slate-400 mb-1 block">Número *</label>
-                <input value={docNum} onChange={e => setDocNum(e.target.value)}
-                  placeholder="12345678" required
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
+                <div className="relative">
+                  <input value={docNum} onChange={e => setDocNum(e.target.value)}
+                    placeholder={docType === "DNI" ? "12345678" : docType === "RUC" ? "20123456789" : "Número"} required
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-3 pr-10 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                    {searchingDoc ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    ) : (
+                      <button type="button" onClick={() => handleLookup(docType, docNum)}
+                        disabled={!docNum.trim()}
+                        className="p-1 rounded text-slate-500 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-30"
+                        title="Buscar pasajero">
+                        <Search className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
