@@ -8,7 +8,7 @@ import {
   Clock, ArrowRight, Activity, Edit2, X, AlertTriangle,
   Copy, XCircle, ChevronDown, UserRound,
 } from "lucide-react";
-import { getCompanyBySlug } from "@/lib/api/branding";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
 import {
   getManagementTripManifest, updateManagementTrip, cancelTrip as cancelTripApi,
   createManagementTrip, getTripsByCompany, searchTrips,
@@ -278,7 +278,14 @@ export default function EmpresaAdminViajesPage() {
     setLoading(true);
     setError("");
     try {
-      const compData = await getCompanyBySlug<any>(slugStr as string);
+      // Por slug; si el acceso vino con el ID crudo (ej. el redirect de
+      // login), caer a getCompanyById.
+      let compData: any;
+      try {
+        compData = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        compData = await getCompanyById<any>(slugStr as string);
+      }
       const cid = compData.company?.id;
       setCompanyId(cid);
 

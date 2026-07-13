@@ -8,7 +8,7 @@ import {
   RefreshCw, TrendingUp, CheckCircle2, AlertCircle, Activity
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
-import { getCompanyBySlug } from "@/lib/api/branding";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
 import { searchTrips } from "@/lib/api/trips";
 
 type Trip = {
@@ -52,8 +52,14 @@ export default function EmpresaAdminDashboard() {
       const user = getCurrentUser();
       if (!user) return;
 
-      // Cargar empresa
-      const companyData = await getCompanyBySlug<any>(slugStr as string);
+      // Cargar empresa (por slug; si el acceso vino con el ID crudo -ej. el
+      // redirect de login-, caer a getCompanyById)
+      let companyData: any;
+      try {
+        companyData = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        companyData = await getCompanyById<any>(slugStr as string);
+      }
       setCompany(companyData.company);
       setPrimaryColor(companyData.company.primaryColor || "#6366f1");
       setSecondaryColor(companyData.company.secondaryColor || "#8b5cf6");

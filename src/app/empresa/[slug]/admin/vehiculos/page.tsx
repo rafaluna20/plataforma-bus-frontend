@@ -7,7 +7,7 @@ import {
   Bus, Plus, AlertCircle, CheckCircle2, RefreshCw,
   Pencil, Trash2, ToggleLeft, ToggleRight, X, Save, Loader2
 } from "lucide-react";
-import { getCompanyBySlug } from "@/lib/api/branding";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
 import { getVehiclesByCompany, createVehicle, updateVehicle, deleteVehicle as deleteVehicleApi } from "@/lib/api/vehicles";
 import ImageUploader from "@/components/ui/ImageUploader";
 import SeatConfigEditor, { SeatTemplate } from "@/components/ui/SeatConfigEditor";
@@ -57,7 +57,9 @@ export default function EmpresaAdminVehiculosPage() {
 
   const { data: companyData } = useQuery<{ company?: { id: string } }>({
     queryKey: ["companyBranding", slugStr],
-    queryFn: () => getCompanyBySlug(slugStr as string),
+    // Por slug; si el acceso vino con el ID crudo (ej. el redirect de
+    // login), caer a getCompanyById.
+    queryFn: () => getCompanyBySlug(slugStr as string).catch(() => getCompanyById(slugStr as string)),
     enabled: !!slugStr,
   });
   const companyId = companyData?.company?.id || "";

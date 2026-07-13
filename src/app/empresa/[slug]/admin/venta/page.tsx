@@ -6,7 +6,7 @@ import {
   Bus, Clock, ArrowRight, RefreshCw, Ticket, Search,
   AlertCircle, MapPin, Users, ChevronRight, Activity,
 } from "lucide-react";
-import { getCompanyBySlug } from "@/lib/api/branding";
+import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
 import { searchTrips } from "@/lib/api/trips";
 
 type Waypoint = {
@@ -96,7 +96,14 @@ export default function EmpresaAdminVentaPage() {
 
   async function loadCompany() {
     try {
-      const data = await getCompanyBySlug<any>(slugStr as string);
+      // Por slug; si el acceso vino con el ID crudo (ej. el redirect de
+      // login), caer a getCompanyById.
+      let data: any;
+      try {
+        data = await getCompanyBySlug<any>(slugStr as string);
+      } catch {
+        data = await getCompanyById<any>(slugStr as string);
+      }
       const cid = data.company.id;
       setCompanyId(cid);
       setCompanyName(data.company.tradeName);
