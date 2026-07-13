@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripDetail, getTripManifest } from "@/lib/api/trips";
-import { createCashBooking, createDigitalBooking } from "@/lib/api/bookings";
+import { createCashBooking, createDigitalBooking, cancelBooking } from "@/lib/api/bookings";
 
 /**
  * Claves compartidas por TODAS las pantallas que muestran el detalle/asientos
@@ -37,6 +37,21 @@ export function useCreateBooking(tripId: string | undefined) {
   return useMutation({
     mutationFn: ({ method, body }: BookingPayload) =>
       method === "cash" ? createCashBooking<any>(body) : createDigitalBooking<any>(body),
+    onSuccess: () => {
+      if (tripId) {
+        queryClient.invalidateQueries({ queryKey: tripDetailKey(tripId) });
+        queryClient.invalidateQueries({ queryKey: tripManifestKey(tripId) });
+      }
+    },
+  });
+}
+
+/** Cancela una reserva y libera su asiento — misma invalidación de caché que useCreateBooking. */
+export function useCancelBooking(tripId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (bookingId: string) => cancelBooking<any>(bookingId),
     onSuccess: () => {
       if (tripId) {
         queryClient.invalidateQueries({ queryKey: tripDetailKey(tripId) });

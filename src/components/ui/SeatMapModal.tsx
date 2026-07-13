@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { getCurrentUser, authFetch } from "@/lib/auth";
 import { calcTripPrice, API_URL } from "@/lib/config";
-import { useCreateBooking, useTripManifest } from "@/lib/queries/trips";
+import { useCreateBooking, useCancelBooking, useTripManifest } from "@/lib/queries/trips";
 import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
@@ -245,10 +245,9 @@ const SeatButton = memo(function SeatButton({
 
   return (
     <button
-      onClick={() => !isOcc && onSeatClick(id)}
-      disabled={isOcc}
-      title={`Asiento ${label}${isOcc ? " — Ocupado" : ""}`}
-      className={`flex-shrink-0 transition-transform duration-150 ${isOcc ? "cursor-not-allowed" : "cursor-pointer hover:scale-105"} ${isSel ? "scale-110 z-10" : ""}`}
+      onClick={() => onSeatClick(id)}
+      title={`Asiento ${label}${isOcc ? " — Ocupado (click para ver/cancelar)" : ""}`}
+      className={`flex-shrink-0 transition-transform duration-150 cursor-pointer hover:scale-105 ${isSel ? "scale-110 z-10" : ""}`}
       style={{ filter: isSel ? `drop-shadow(0 0 10px ${color})` : undefined }}>
       <SeatIcon color={color} label={label} size={SZ} />
     </button>
@@ -1120,6 +1119,122 @@ function SaleModal({
   );
 }
 
+// ─── Panel de detalle de pasajero / cancelar reserva (asiento ocupado) ────────
+function PassengerDetailModal({
+  open, onClose, passenger, seatLabel, primaryColor, secondaryColor, tripId,
+}: {
+  open: boolean; onClose: () => void;
+  passenger: ManifestPassenger | null;
+  seatLabel: string;
+  primaryColor: string; secondaryColor: string; tripId: string;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+  const cancelBooking = useCancelBooking(tripId);
+
+  useEffect(() => {
+    if (open) { setConfirming(false); setError(""); }
+  }, [open, passenger?.id]);
+
+  if (!open || !passenger) return null;
+
+  const paymentStatusLabel: Record<string, string> = {
+    PENDING_CASH: "Pago al abordar",
+    PAID_DIGITAL: "Pagado digital",
+    PAID: "Pagado",
+  };
+
+  async function handleCancel() {
+    setError("");
+    try {
+      await cancelBooking.mutateAsync(passenger!.id);
+      onClose();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+        style={{ background: "#0f172a" }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-white/8"
+          style={{ background: `linear-gradient(135deg, ${primaryColor}20, ${secondaryColor}15)` }}>
+          <div>
+            <h2 className="text-white font-bold text-base">Asiento {seatLabel} — Ocupado</h2>
+            <p className="text-xs mt-0.5" style={{ color: primaryColor }}>{passenger.name}</p>
+          </div>
+          <button onClick={onClose}
+            className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="space-y-2 p-4 rounded-xl border border-white/8 bg-slate-900/60">
+            {[
+              { label: "Pasajero", value: passenger.name },
+              { label: "Documento", value: passenger.document },
+              { label: "Tramo", value: `${passenger.origin} → ${passenger.destination}` },
+              { label: "Precio", value: `S/ ${Number(passenger.price ?? 0).toFixed(2)}`, color: "#10b981" },
+              { label: "Estado", value: paymentStatusLabel[passenger.paymentStatus] || passenger.paymentStatus },
+              { label: "Pago", value: passenger.paymentMethod === "CASH" ? "Efectivo" : passenger.paymentMethod },
+            ].map((item, i) => (
+              <div key={i} className="flex justify-between items-center gap-3">
+                <span className="text-slate-500 text-xs flex-shrink-0">{item.label}</span>
+                <span className="font-bold text-sm text-right" style={{ color: (item as any).color || "white" }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {error && (
+            <div className="flex items-start gap-2 text-xs text-red-400 p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> {error}
+            </div>
+          )}
+
+          {!confirming ? (
+            <button
+              onClick={() => setConfirming(true)}
+              className="w-full py-3 rounded-xl font-bold text-sm border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors flex items-center justify-center gap-2"
+            >
+              <X className="w-4 h-4" /> Cancelar reserva / Liberar asiento
+            </button>
+          ) : (
+            <div className="space-y-3 p-4 rounded-xl border border-red-500/30 bg-red-500/5">
+              <p className="text-sm text-red-300">
+                ¿Confirmas cancelar la reserva de <strong>{passenger.name}</strong>? El asiento {seatLabel} quedará libre.
+                {["PAID_DIGITAL", "PAID"].includes(passenger.paymentStatus) && (
+                  <> Ya estaba pagado — el reembolso, si corresponde, se gestiona por fuera del sistema.</>
+                )}
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setConfirming(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
+                  No, volver
+                </button>
+                <button onClick={handleCancel} disabled={cancelBooking.isPending}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}>
+                  {cancelBooking.isPending
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Cancelando...</>
+                    : <>Sí, cancelar</>}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function SeatMapModal({
   open, onClose, tripId, vehicleType, vehicleCapacity,
@@ -1139,6 +1254,7 @@ export default function SeatMapModal({
   const [selectedSeat, setSelectedSeat] = useState<string>("");
   const [selectedSeatFloor, setSelectedSeatFloor] = useState<0 | 1 | 2>(0);
   const [saleModalOpen, setSaleModalOpen] = useState(false);
+  const [passengerDetailSeat, setPassengerDetailSeat] = useState<string | null>(null);
   const [sidebarMode, setSidebarMode] = useState<"pasajes" | "encomiendas" | "pasajeros" | "vendedores">("pasajes");
   const [editMode, setEditMode] = useState(false);
   const [seatLabels, setSeatLabels] = useState<Record<string, string>>(defaultLabels);
@@ -1233,6 +1349,12 @@ export default function SeatMapModal({
   // Callbacks estables con useCallback
   const handleSeatClick = useCallback((id: string) => {
     if (editMode) return;
+    // Asiento ocupado: mostrar datos del pasajero + opción de cancelar/liberar,
+    // en vez de abrir el flujo de venta.
+    if (occupied.includes(id)) {
+      setPassengerDetailSeat(id);
+      return;
+    }
     setSelectedSeat(id);
     // Determinar el piso del asiento desde el seatTemplate
     if (seatTemplate) {
@@ -1243,7 +1365,7 @@ export default function SeatMapModal({
       setSelectedSeatFloor(0);
     }
     setSaleModalOpen(true);
-  }, [editMode, seatTemplate]);
+  }, [editMode, seatTemplate, occupied]);
 
   const handleLabelChange = useCallback((id: string, val: string) => {
     setSeatLabels(prev => ({ ...prev, [id]: val }));
@@ -2358,6 +2480,17 @@ export default function SeatMapModal({
         departureTime={departureTime}
         origin={origin}
         destination={destination}
+      />
+
+      {/* ─── PANEL DE PASAJERO / CANCELAR RESERVA (asiento ocupado) ──────────── */}
+      <PassengerDetailModal
+        open={!!passengerDetailSeat}
+        onClose={() => setPassengerDetailSeat(null)}
+        passenger={passengers.find(p => p.seatId === passengerDetailSeat) || null}
+        seatLabel={passengerDetailSeat ? (seatLabels[passengerDetailSeat] ?? passengerDetailSeat.replace(/\D/g, "")) : ""}
+        primaryColor={primaryColor}
+        secondaryColor={secondaryColor}
+        tripId={tripId}
       />
 
       {/* ─── MODAL DE REGISTRO DE ENCOMIENDA ─────────────────────────────────── */}
