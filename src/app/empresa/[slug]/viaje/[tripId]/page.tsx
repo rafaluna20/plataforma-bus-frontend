@@ -180,7 +180,7 @@ export default function EmpresaViajeDetailPage() {
   const [trip, setTrip]                   = useState<TripDetail | null>(null);
   const [loading, setLoading]             = useState(true);
   const [error, setError]                 = useState("");
-  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa">("descripcion");
+  const [activeTab, setActiveTab]         = useState<"descripcion" | "paradas" | "vehiculo" | "pasajeros" | "encomiendas" | "vendedores" | "mapa">("pasajeros");
   const [startWaypointId, setStartWaypointId] = useState("");
   const [endWaypointId, setEndWaypointId]     = useState("");
   const [seatModalOpen, setSeatModalOpen]     = useState(false);
@@ -225,6 +225,27 @@ export default function EmpresaViajeDetailPage() {
   // ─── Estado para autorizar abordaje / confirmar llegada ──────────────────────
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [statusError, setStatusError]       = useState("");
+
+  // ─── KPIs Operacionales ──────────────────────────────────────────────────────
+  const { totalRevenue, pendingRevenue, parcelsRevenue, uniqueSellers } = useMemo(() => {
+    let rev = 0;
+    let pend = 0;
+    const sellers = new Set<string>();
+
+    passengers.forEach(p => {
+      if (p.paymentStatus === "PAID" || p.paymentStatus === "PAID_DIGITAL") rev += p.price || 0;
+      else if (p.paymentStatus === "PENDING_CASH") pend += p.price || 0;
+      if (p.seller?.id) sellers.add(p.seller.id);
+    });
+
+    let pRev = 0;
+    parcels.forEach(p => {
+      pRev += p.totalPrice || 0;
+      if ((p as any).seller?.id) sellers.add((p as any).seller.id);
+    });
+
+    return { totalRevenue: rev, pendingRevenue: pend, parcelsRevenue: pRev, uniqueSellers: sellers.size };
+  }, [passengers, parcels]);
 
   // ─── Carga de datos ──────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -505,82 +526,74 @@ export default function EmpresaViajeDetailPage() {
           {/* ── COLUMNA IZQUIERDA (2/3) ──────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Hero */}
-            <div className="relative rounded-2xl overflow-hidden border border-white/8 bg-slate-900/60" style={{ height: "280px" }}>
-              <img
-                src={vehicleImg}
-                alt={typeLabel}
-                className="w-full h-full object-cover"
-                onError={e => {
-                  const img = e.target as HTMLImageElement;
-                  img.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='280' viewBox='0 0 800 280'%3E%3Crect width='800' height='280' fill='%231e293b'/%3E%3Ctext x='400' y='150' text-anchor='middle' fill='%2364748b' font-size='48'%3E🚌%3C/text%3E%3C/svg%3E`;
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
-              <div className="absolute top-4 left-4 flex gap-2">
-                <span className="px-3 py-1 rounded-full text-xs font-bold"
-                  style={{ background: statusInfo.bg, color: statusInfo.color, border: `1px solid ${statusInfo.color}40` }}>
-                  {statusInfo.label}
-                </span>
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800/80 text-slate-300 border border-white/10">
-                  {typeLabel}
-                </span>
-              </div>
-              <div className="absolute top-4 right-4 flex gap-2">
-                <button
-                  onClick={() => navigator.share?.({ title: company.tradeName, url: window.location.href }).catch(() => {})}
-                  className="p-2 rounded-full bg-slate-800/80 border border-white/10 text-slate-400 hover:text-white transition-colors">
-                  <Share2 className="w-4 h-4" />
-                </button>
-                <button className="p-2 rounded-full bg-slate-800/80 border border-white/10 text-slate-400 hover:text-red-400 transition-colors">
-                  <Heart className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="absolute bottom-4 left-4 flex items-center gap-2">
-                {company.logoUrl && (
-                  <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/20 bg-white flex items-center justify-center p-1 shadow-md">
-                    <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain" />
-                  </div>
-                )}
-                <span className="text-white font-bold text-sm drop-shadow">{company.tradeName}</span>
-              </div>
-            </div>
-
-            {/* Título de Ruta Rediseñado */}
-            <div className="space-y-1 bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-sm">
-              <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wider text-slate-400 uppercase">
-                <Bus className="w-3.5 h-3.5" style={{ color: primaryColor }} />
-                <span>Ruta de Servicio</span>
-                <span className="text-slate-600">•</span>
-                <span className="text-[11px] font-bold text-slate-500">{company.tradeName}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-1">
-                <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
-                  {formatCity(origin)}
-                </h1>
-                <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
-                <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-white">
-                  {formatCity(destination)}
-                </h1>
-              </div>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { icon: <Users className="w-4 h-4 text-indigo-400" />, value: freeSeats, label: "ASIENTOS LIBRES" },
-                { icon: <Users className="w-4 h-4 text-slate-400" />, value: occupiedSeats.length, label: "PASAJEROS" },
-                { icon: <Clock className="w-4 h-4 text-emerald-400" />,
-                  value: departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }),
-                  label: "SALIDA" },
-              ].map((stat, i) => (
-                <div key={i} className="bg-slate-900/60 border border-white/5 rounded-xl p-4 text-center">
-                  <div className="flex items-center justify-center mb-1">{stat.icon}</div>
-                  <p className="text-2xl font-bold text-white">{stat.value}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{stat.label}</p>
+            {/* Header Compacto Operacional */}
+            <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                    style={{ background: statusInfo.bg, color: statusInfo.color, border: `1px solid ${statusInfo.color}40` }}>
+                    {statusInfo.label}
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">{typeLabel}</span>
                 </div>
-              ))}
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-white">
+                  <h1 className="text-xl font-extrabold tracking-tight">{formatCity(origin)}</h1>
+                  <ArrowRight className="w-4 h-4 text-slate-500 shrink-0" />
+                  <h1 className="text-xl font-extrabold tracking-tight">{formatCity(destination)}</h1>
+                </div>
+              </div>
+              <div className="flex items-center gap-5 md:text-right">
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Salida</p>
+                  <p className="text-lg font-bold text-white flex items-center md:justify-end gap-1.5">
+                    <Clock className="w-4 h-4 text-emerald-400" />
+                    {departure.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <div className="h-8 w-px bg-white/10 hidden md:block" />
+                <div>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase mb-0.5">Asientos Libres</p>
+                  <p className="text-lg font-bold flex items-center md:justify-end gap-1.5" style={{ color: primaryColor }}>
+                    <Users className="w-4 h-4" />
+                    {freeSeats} <span className="text-xs text-slate-500 font-normal">/ {effectiveCapacity}</span>
+                  </p>
+                </div>
+              </div>
             </div>
+
+            {/* KPIs Operacionales (Reemplazan a los antiguos Stats) */}
+            {isCompanyStaff && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs text-slate-400 font-medium">Recaudado</p>
+                    <Banknote className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <p className="text-xl font-bold text-white">S/ {totalRevenue.toFixed(2)}</p>
+                </div>
+                <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs text-slate-400 font-medium">Por Cobrar</p>
+                    <AlertCircle className="w-4 h-4 text-amber-400" />
+                  </div>
+                  <p className="text-xl font-bold text-white">S/ {pendingRevenue.toFixed(2)}</p>
+                </div>
+                <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs text-slate-400 font-medium">Encomiendas</p>
+                    <Package className="w-4 h-4 text-indigo-400" />
+                  </div>
+                  <p className="text-xl font-bold text-white">{parcels.length} <span className="text-xs font-normal text-slate-500">(S/ {parcelsRevenue.toFixed(2)})</span></p>
+                </div>
+                <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
+                  <div className="flex justify-between items-start mb-1">
+                    <p className="text-xs text-slate-400 font-medium">Vendedores</p>
+                    <Users className="w-4 h-4 text-slate-400" />
+                  </div>
+                  <p className="text-xl font-bold text-white">{uniqueSellers}</p>
+                </div>
+              </div>
+            )}
 
             {/* Tabs */}
             <div className="flex gap-1 p-1 bg-slate-900/60 rounded-xl border border-white/5 w-fit flex-wrap">
@@ -1256,31 +1269,58 @@ export default function EmpresaViajeDetailPage() {
           <div className="lg:col-span-1">
             <div className="sticky top-20 space-y-4">
 
-              {/* Autorizar abordaje / confirmar llegada (staff, según permisos por rol) */}
-              {isCompanyStaff && TRIP_STATUS_FLOW[trip.status] &&
-                !(currentUser?.role === "AGENCY_SELLER" && trip.status === "IN_TRANSIT") && (
-                <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 space-y-3 backdrop-blur-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Estado del Viaje</p>
-                    <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-                      style={{ background: statusInfo.bg, color: statusInfo.color }}>
-                      {statusInfo.label}
-                    </span>
+              {/* Stepper de Estado de Viaje */}
+              <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 space-y-5 backdrop-blur-sm">
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Progreso del Viaje</p>
+                <div className="relative">
+                  {/* Línea conectora */}
+                  <div className="absolute top-3.5 left-6 right-6 h-0.5 bg-slate-800" />
+                  <div className="flex justify-between relative z-10">
+                    {["SCHEDULED", "BOARDING", "IN_TRANSIT", "COMPLETED"].map((st, idx, arr) => {
+                      const isActive = trip.status === st;
+                      const isPast = arr.indexOf(trip.status) > idx;
+                      const isCompletedTrip = trip.status === "COMPLETED";
+                      const labels: Record<string, string> = {
+                        SCHEDULED: "Programado", BOARDING: "Abordando", IN_TRANSIT: "En Ruta", COMPLETED: "Completado"
+                      };
+                      return (
+                        <div key={st} className="flex flex-col items-center gap-2">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-colors ${
+                            isActive && !isCompletedTrip ? "border-indigo-500 bg-indigo-500 text-white" :
+                            (isPast || (isCompletedTrip && isActive)) ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-700 bg-slate-900 text-slate-500"
+                          }`}>
+                            {(isPast || (isCompletedTrip && isActive)) ? <CheckCircle2 className="w-4 h-4" /> : <span className="text-[10px] font-bold">{idx + 1}</span>}
+                          </div>
+                          <span className={`text-[10px] font-bold ${
+                            isActive && !isCompletedTrip ? "text-indigo-400" :
+                            (isPast || (isCompletedTrip && isActive)) ? "text-emerald-400" : "text-slate-500"
+                          }`}>
+                            {labels[st]}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {statusError && (
-                    <p className="text-red-400 text-xs bg-red-500/10 p-2 rounded-lg">{statusError}</p>
-                  )}
-                  <button
-                    onClick={advanceTripStatus}
-                    disabled={updatingStatus}
-                    className="w-full py-3 rounded-xl font-bold text-white text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                    style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    {updatingStatus ? "Actualizando..." : TRIP_STATUS_FLOW[trip.status].btnLabel}
-                  </button>
                 </div>
-              )}
+
+                {isCompanyStaff && TRIP_STATUS_FLOW[trip.status] &&
+                  !(currentUser?.role === "AGENCY_SELLER" && trip.status === "IN_TRANSIT") && (
+                  <div className="pt-2 border-t border-white/10 mt-4">
+                    {statusError && (
+                      <p className="text-red-400 text-xs bg-red-500/10 p-2 rounded-lg mb-3">{statusError}</p>
+                    )}
+                    <button
+                      onClick={advanceTripStatus}
+                      disabled={updatingStatus}
+                      className="w-full py-3 mt-3 rounded-xl font-bold text-white text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                      style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      {updatingStatus ? "Actualizando..." : TRIP_STATUS_FLOW[trip.status].btnLabel}
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Tarjeta de reserva */}
               <div className="bg-slate-900/80 border border-white/10 rounded-2xl p-5 space-y-4 backdrop-blur-sm">
