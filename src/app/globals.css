@@ -73,11 +73,15 @@ body {
     50% { box-shadow: 0 0 20px 8px rgba(99, 102, 241, 0.15); }
 }
 
-/* Scrollbar Styling */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--color-surface); }
-::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+/* Scrollbar Styling — vertical (general) */
+::-webkit-scrollbar { width: 5px; height: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(100,116,139,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,0.6); }
+
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Seat Map Styles */
 .seat {

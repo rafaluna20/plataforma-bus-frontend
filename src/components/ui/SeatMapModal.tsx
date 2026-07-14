@@ -159,17 +159,25 @@ const SeatIcon = memo(function SeatIcon({
         position: "relative",
         display: "flex", flexDirection: "column", alignItems: "center",
       }}>
+        {/* Respaldo */}
         <div style={{
           width: Math.round(baseW * 0.76), height: backH,
-          background: color, border: `2px solid ${border}`,
+          background: `linear-gradient(180deg, ${color} 60%, ${border} 100%)`,
+          border: `2.5px solid ${border}`,
+          outline: "1.5px solid rgba(255,255,255,0.18)",
+          outlineOffset: "-1px",
           borderRadius: `${r1}px ${r1}px ${r2}px ${r2}px`,
-          boxShadow: `0 3px 8px ${shadow}, inset 0 2px 0 rgba(255,255,255,0.3)`,
+          boxShadow: `0 4px 12px ${shadow}, 0 0 0 1px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.35)`,
         }} />
+        {/* Asiento */}
         <div style={{
           width: Math.round(baseW * 0.86), height: seatH, marginTop: 2,
-          background: color, border: `2px solid ${border}`,
+          background: `linear-gradient(180deg, ${color} 0%, ${border} 100%)`,
+          border: `2.5px solid ${border}`,
+          outline: "1.5px solid rgba(255,255,255,0.18)",
+          outlineOffset: "-1px",
           borderRadius: `${r2}px ${r2}px ${r3}px ${r3}px`,
-          boxShadow: `0 4px 10px ${shadow}, inset 0 2px 0 rgba(255,255,255,0.2)`,
+          boxShadow: `0 5px 14px ${shadow}, 0 0 0 1px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.25)`,
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
           {label ? (
@@ -177,20 +185,25 @@ const SeatIcon = memo(function SeatIcon({
               fontSize: fs, fontWeight: 900, lineHeight: 1,
               color: textColor, userSelect: "none",
               transform: "rotate(-90deg)", display: "inline-block",
+              textShadow: "0 1px 3px rgba(0,0,0,0.5)",
             }}>{label}</span>
           ) : null}
         </div>
+        {/* Brazo izquierdo */}
         <div style={{
           position: "absolute", left: 0, top: armTop,
           width: armW, height: armH,
-          background: color, border: `1.5px solid ${border}`,
-          opacity: 0.85, borderRadius: armW / 2,
+          background: border,
+          border: `1.5px solid rgba(0,0,0,0.4)`,
+          opacity: 0.95, borderRadius: armW / 2,
         }} />
+        {/* Brazo derecho */}
         <div style={{
           position: "absolute", right: 0, top: armTop,
           width: armW, height: armH,
-          background: color, border: `1.5px solid ${border}`,
-          opacity: 0.85, borderRadius: armW / 2,
+          background: border,
+          border: `1.5px solid rgba(0,0,0,0.4)`,
+          opacity: 0.95, borderRadius: armW / 2,
         }} />
       </div>
     </div>
@@ -2335,7 +2348,7 @@ export default function SeatMapModal({
           </div>
 
           {/* Contenedor que escala el bus para ocupar el 80% del ancho disponible */}
-          <div className="w-full flex-1 flex flex-col items-center justify-start gap-2 overflow-auto">
+          <div className="w-full flex-1 flex flex-col items-center justify-start gap-2 overflow-y-auto overflow-x-hidden">
 
             {/* Piso 2 */}
             {isTwoDeck && (
@@ -2348,7 +2361,7 @@ export default function SeatMapModal({
                   </span>
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
-                <div className="w-full overflow-x-auto flex justify-start lg:justify-center">
+                <div className="w-full overflow-x-auto scrollbar-hide flex justify-start lg:justify-center" style={{ scrollbarWidth: "none" }}>
                   <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "2px" }}>
                     <BusMap {...busMapProps} floor={2} />
                   </div>
@@ -2368,7 +2381,7 @@ export default function SeatMapModal({
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
               )}
-              <div className="w-full overflow-x-auto flex justify-start lg:justify-center">
+              <div className="w-full overflow-x-auto scrollbar-hide flex justify-start lg:justify-center" style={{ scrollbarWidth: "none" }}>
                 <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "15px" }}>
                   <BusMap {...busMapProps} floor={1} />
                 </div>
