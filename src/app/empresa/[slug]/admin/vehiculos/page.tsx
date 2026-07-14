@@ -26,6 +26,7 @@ type Vehicle = {
   brand?: string | null;
   circulationCard?: string | null;
   insurancePolicy?: string | null;
+  maxCargoWeightKg?: number | null;
 };
 
 const MAX_VEHICLE_PHOTOS = 5;
@@ -62,6 +63,7 @@ const emptyForm = {
   brand: "",
   circulationCard: "",
   insurancePolicy: "",
+  maxCargoWeightKg: "",
 };
 
 export default function EmpresaAdminVehiculosPage() {
@@ -124,6 +126,7 @@ export default function EmpresaAdminVehiculosPage() {
       brand:            v.brand || "",
       circulationCard:  v.circulationCard || "",
       insurancePolicy:  v.insurancePolicy || "",
+      maxCargoWeightKg: v.maxCargoWeightKg != null ? String(v.maxCargoWeightKg) : "",
     });
     // Cargar el seatTemplate existente para mostrarlo en el editor visual
     setSeatTemplate(v.seatTemplate as unknown as SeatTemplate || null);
@@ -153,6 +156,7 @@ export default function EmpresaAdminVehiculosPage() {
         ...form,
         imageUrls: cleanImages,
         imageUrl: cleanImages[0] || null,
+        maxCargoWeightKg: form.maxCargoWeightKg ? parseFloat(form.maxCargoWeightKg) : null,
       };
       if (seatTemplate) payload.seatTemplate = seatTemplate;
 
@@ -379,6 +383,26 @@ export default function EmpresaAdminVehiculosPage() {
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none transition-colors"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Capacidad de carga (encomiendas) */}
+          <div className="border-t border-white/5 pt-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-1">Capacidad de Carga (opcional)</p>
+            <p className="text-xs text-slate-600 mb-3">
+              Si la configuras, el panel de encomiendas del viaje mostrará una alerta cuando el peso acumulado se acerque a este límite.
+            </p>
+            <div className="max-w-xs">
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Peso máximo de carga (kg)</label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={form.maxCargoWeightKg}
+                onChange={e => setForm(f => ({ ...f, maxCargoWeightKg: e.target.value }))}
+                placeholder="Ej: 500"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+              />
             </div>
           </div>
 

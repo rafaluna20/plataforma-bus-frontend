@@ -70,6 +70,7 @@ type TripDetail = {
     capacity: number;
     imageUrl: string | null;
     imageUrls?: string[] | null;
+    maxCargoWeightKg?: number | null;
     seatTemplate: any;
   };
 };
@@ -1525,6 +1526,7 @@ export default function EmpresaViajeDetailPage() {
         waypoints={waypoints}
         primaryColor={primaryColor}
         secondaryColor={secondaryColor}
+        companyId={company.id}
         companyName={company.tradeName}
         companyLogoUrl={company.logoUrl || undefined}
         companyRuc={company.ruc || undefined}
@@ -1533,6 +1535,7 @@ export default function EmpresaViajeDetailPage() {
         plateNumber={vehicle.plateNumber || undefined}
         vehicleImageUrl={vehicle.imageUrl}
         vehicleImageUrls={vehicle.imageUrls}
+        vehicleMaxCargoWeightKg={vehicle.maxCargoWeightKg}
         onSaleSuccess={(receipt) => {
           // No hace falta tocar pasajeros/asientos a mano: la venta ya invalidó
           // la consulta compartida del manifiesto, se refresca sola.

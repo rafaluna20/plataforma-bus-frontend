@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback, useMemo, memo, type ReactNode } from 
 import {
   X, CheckCircle2, AlertCircle, Loader2,
   Banknote, CreditCard, ArrowRight, ArrowLeft, Pencil, Package, Ticket, TicketCheck, Save, RotateCcw,
-  Users, RefreshCw, MapPin, Printer, Search, ChevronLeft, ChevronRight
+  Users, RefreshCw, MapPin, Printer, Search, ChevronLeft, ChevronRight, Send
 } from "lucide-react";
 import { getCurrentUser, authFetch } from "@/lib/auth";
 import { calcTripPrice, API_URL } from "@/lib/config";
 import { useCreateBooking, useCancelBooking, useReserveSeat, useConfirmReservation, useTripManifest } from "@/lib/queries/trips";
-import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
-import { getManifestPrintData } from "@/lib/api/trips";
+import { getParcelsByTrip, updateParcelStatus, reassignParcel as reassignParcelApi } from "@/lib/api/parcels";
+import { getManifestPrintData, getTripsByCompany } from "@/lib/api/trips";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
 import { printPassengerManifest, printParcelManifest, type ManifestPrintData } from "@/lib/printUtils";
@@ -52,6 +52,7 @@ type SeatMapModalProps = {
   waypoints: Waypoint[];
   primaryColor: string;
   secondaryColor: string;
+  companyId?: string;
   companyName: string;
   companyLogoUrl?: string;
   companyRuc?: string;
@@ -60,6 +61,7 @@ type SeatMapModalProps = {
   plateNumber?: string;
   vehicleImageUrl?: string | null;
   vehicleImageUrls?: string[] | null;
+  vehicleMaxCargoWeightKg?: number | null;
   onSaleSuccess?: (receipt: any) => void;
 };
 
@@ -1448,7 +1450,7 @@ export default function SeatMapModal({
   open, onClose, tripId, vehicleType, vehicleCapacity,
   seatTemplate,
   occupiedSeats: initialOccupied, waypoints, primaryColor, secondaryColor,
-  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, vehicleImageUrl, vehicleImageUrls, onSaleSuccess,
+  companyId, companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, vehicleImageUrl, vehicleImageUrls, vehicleMaxCargoWeightKg, onSaleSuccess,
 }: SeatMapModalProps) {
 
   const isTwoDeck = vehicleType === "BUS_2P";
@@ -1520,6 +1522,42 @@ export default function SeatMapModal({
   const [parcelsError, setParcelsError] = useState("");
   const [parcelSearch, setParcelSearch] = useState("");
   const [parcelModalOpen, setParcelModalOpen] = useState(false);
+
+  // ─── Reasignar encomienda a otro viaje (ej. no cabe en esta unidad) ───────
+  const [reassigningParcel, setReassigningParcel] = useState<ManifestParcel | null>(null);
+  const [reassignTripId, setReassignTripId] = useState("");
+  const [reassigning, setReassigning] = useState(false);
+  const [reassignTrips, setReassignTrips] = useState<any[]>([]);
+  const [loadingReassignTrips, setLoadingReassignTrips] = useState(false);
+
+  async function openReassign(parcel: ManifestParcel) {
+    setReassigningParcel(parcel);
+    setReassignTripId("");
+    if (!companyId) return;
+    setLoadingReassignTrips(true);
+    try {
+      const data = await getTripsByCompany<any>(companyId);
+      setReassignTrips(data.trips || []);
+    } catch {
+      setReassignTrips([]);
+    } finally {
+      setLoadingReassignTrips(false);
+    }
+  }
+
+  async function confirmReassignParcel(newTripId: string | null) {
+    if (!reassigningParcel) return;
+    setReassigning(true);
+    try {
+      await reassignParcelApi(reassigningParcel.id, newTripId);
+      setReassigningParcel(null);
+      loadParcels();
+    } catch (e: any) {
+      setParcelsError(e.message);
+    } finally {
+      setReassigning(false);
+    }
+  }
 
   // Precio total (memoizado)
   const price = useMemo(
@@ -2073,6 +2111,31 @@ export default function SeatMapModal({
                   </div>
                 </div>
 
+                {/* Capacidad de carga (si el vehículo tiene un límite configurado) */}
+                {!!vehicleMaxCargoWeightKg && (() => {
+                  const totalWeight = parcels.reduce((acc, p) => acc + Number(p.weightKg || 0), 0);
+                  const pct = Math.min(100, (totalWeight / vehicleMaxCargoWeightKg) * 100);
+                  const isFull = pct >= 90;
+                  const isWarn = pct >= 70;
+                  return (
+                    <div className="p-2 rounded-lg bg-slate-900/60 border border-white/5">
+                      <div className="flex items-center justify-between text-[10px] mb-1">
+                        <span className="text-slate-500">Capacidad de carga</span>
+                        <span className={`font-bold ${isFull ? "text-red-400" : isWarn ? "text-amber-400" : "text-slate-300"}`}>
+                          {totalWeight.toFixed(1)} / {vehicleMaxCargoWeightKg} kg
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, background: isFull ? "#ef4444" : isWarn ? "#f59e0b" : "#10b981" }} />
+                      </div>
+                      {isFull && (
+                        <p className="text-[9px] text-red-400 mt-1">Casi lleno — considera reasignar encomiendas a otra unidad.</p>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Buscador */}
                 <input
                   type="text"
@@ -2161,8 +2224,18 @@ export default function SeatMapModal({
                               <option value="IN_TRANSIT">En viaje</option>
                               <option value="READY_FOR_PICKUP">Listo retirar</option>
                               <option value="DELIVERED">Entregado</option>
+                              <option value="CANCELLED">Cancelado</option>
                             </select>
                           </div>
+                          {p.status !== "DELIVERED" && p.status !== "CANCELLED" && (
+                            <button
+                              onClick={() => openReassign(p)}
+                              className="w-full flex items-center justify-center gap-1 py-1 rounded bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-amber-400 text-[9px] font-semibold transition-all"
+                              title="No cabe en esta unidad — enviar en otro viaje"
+                            >
+                              <RefreshCw className="w-2.5 h-2.5" /> Reasignar a otro viaje
+                            </button>
+                          )}
                         </div>
                       );
                     })}
@@ -2883,6 +2956,71 @@ export default function SeatMapModal({
           onSuccess={loadParcels}
         />
       )}
+
+      {/* ─── Reasignar encomienda a otro viaje ──────────────────────────────── */}
+      {reassigningParcel && (() => {
+        const eligible = reassignTrips.filter((t: any) =>
+          (t.status === "SCHEDULED" || t.status === "BOARDING") &&
+          t.id !== tripId &&
+          t.route?.name === routeName
+        );
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  <Send className="w-5 h-5 text-amber-400" /> Reasignar Encomienda
+                </h3>
+                <button onClick={() => setReassigningParcel(null)} className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-slate-400 text-sm">
+                {reassigningParcel.senderName} → {reassigningParcel.receiverName} ({reassigningParcel.startWaypoint?.station?.name} → {reassigningParcel.endWaypoint?.station?.name})
+              </p>
+
+              {loadingReassignTrips ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-amber-400" />
+                </div>
+              ) : eligible.length === 0 ? (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200 text-sm">
+                  No hay otros viajes programados o abordando en esta misma ruta ahora mismo. Puedes enviarla a la bandeja general y asignarla luego desde &quot;Bandeja de Encomiendas&quot;.
+                </div>
+              ) : (
+                <select value={reassignTripId} onChange={e => setReassignTripId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none">
+                  <option value="">Selecciona un viaje...</option>
+                  {eligible.map((t: any) => (
+                    <option key={t.id} value={t.id}>
+                      {new Date(t.departureTime).toLocaleString("es-PE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })} — {t.vehicle?.plateNumber}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => confirmReassignParcel(null)}
+                  disabled={reassigning}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  Enviar a la bandeja
+                </button>
+                <button
+                  onClick={() => confirmReassignParcel(reassignTripId)}
+                  disabled={reassigning || !reassignTripId}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)" }}
+                >
+                  {reassigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Reasignar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

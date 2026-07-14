@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   Bus, Ticket, BarChart3, Settings, LogOut,
   Menu, X, ChevronRight, Home,
-  Map, Building2, Truck, Users
+  Map, Building2, Truck, Users, Package
 } from "lucide-react";
 import { getCurrentUser, logout } from "@/lib/auth";
 import { getMyBranding } from "@/lib/api/branding";
@@ -135,6 +135,12 @@ export default function EmpresaAdminLayout({ children }: { children: React.React
       href: `/empresa/${slugStr}/admin/vendedores`,
       label: "Vendedores",
       icon: <Users className="w-5 h-5" />,
+      exact: false,
+    },
+    {
+      href: `/empresa/${slugStr}/admin/encomiendas`,
+      label: "Bandeja de Encomiendas",
+      icon: <Package className="w-5 h-5" />,
       exact: false,
     },
     {
