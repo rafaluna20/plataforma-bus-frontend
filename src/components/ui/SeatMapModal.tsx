@@ -2352,8 +2352,8 @@ export default function SeatMapModal({
             </button>
           </div>
 
-          {/* Contenedor que escala el bus para ocupar el 80% del ancho disponible */}
-          <div className="w-full flex-1 flex flex-col items-center justify-start gap-2 overflow-y-auto overflow-x-hidden">
+          {/* Contenedor que escala el bus — centrado siempre */}
+          <div className="w-full flex-1 flex flex-col items-center justify-start gap-4 overflow-y-auto overflow-x-hidden py-2">
 
             {/* Piso 2 */}
             {isTwoDeck && (
@@ -2366,8 +2366,20 @@ export default function SeatMapModal({
                   </span>
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
-                <div className="w-full overflow-x-auto scrollbar-hide flex justify-start lg:justify-center" style={{ scrollbarWidth: "none" }}>
-                  <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "2px" }}>
+                {/* Wrapper: overflow-x permite scroll en móvil si el bus es más ancho que la pantalla */}
+                <div className="w-full overflow-x-auto scrollbar-hide flex justify-center" style={{ scrollbarWidth: "none" }}>
+                  {/*
+                    scale(0.85) con transformOrigin="center top":
+                    - El bus se centra horizontalmente
+                    - Se compensa el espacio vertical perdido por el escalado
+                      con un margen negativo: -(busHeight * 0.15 / 2)
+                  */}
+                  <div style={{
+                    transform: "scale(0.85)",
+                    transformOrigin: "center top",
+                    display: "inline-block",
+                    marginBottom: "-6%",
+                  }}>
                     <BusMap {...busMapProps} floor={2} />
                   </div>
                 </div>
@@ -2386,8 +2398,13 @@ export default function SeatMapModal({
                   <div className="h-px flex-1 opacity-15" style={{ background: "#6366f1" }} />
                 </div>
               )}
-              <div className="w-full overflow-x-auto scrollbar-hide flex justify-start lg:justify-center" style={{ scrollbarWidth: "none" }}>
-                <div style={{ transform: "scale(0.85)", transformOrigin: "left top", display: "inline-block", paddingBottom: "15px" }}>
+              <div className="w-full overflow-x-auto scrollbar-hide flex justify-center" style={{ scrollbarWidth: "none" }}>
+                <div style={{
+                  transform: "scale(0.85)",
+                  transformOrigin: "center top",
+                  display: "inline-block",
+                  marginBottom: "-6%",
+                }}>
                   <BusMap {...busMapProps} floor={1} />
                 </div>
               </div>
