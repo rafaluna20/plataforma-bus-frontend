@@ -2684,10 +2684,10 @@ export default function SeatMapModal({
 
         {/* ── PANEL DERECHO: foto + info del vehículo (solo desktop) ─────────── */}
         <div className={`hidden lg:flex flex-shrink-0 border-white/8 lg:flex-col overflow-hidden transition-[width] duration-200 ${
-          vehiclePanelCollapsed ? "w-0 border-l-0" : "w-64 border-l"
+          vehiclePanelCollapsed ? "w-0 border-l-0" : "w-[22.4rem] border-l"
         }`}
           style={{ background: "#080d1a" }}>
-          <div className="flex-1 flex flex-col" style={{ width: "16rem" }}>
+          <div className="flex-1 flex flex-col" style={{ width: "22.4rem" }}>
             {/* Foto del vehículo (mitad superior) */}
             <div className="h-1/2 flex-shrink-0 relative border-b border-white/8 bg-slate-900/60">
               <img

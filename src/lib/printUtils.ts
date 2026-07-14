@@ -154,6 +154,20 @@ export function printPassengerManifest(data: ManifestPrintData) {
           @page { size: A4 portrait; margin: 10mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000; }
           body { padding: 6px; background: #fff; font-size: 10px; }
+          .toolbar {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; justify-content: flex-end; gap: 8px;
+            padding: 10px 6px; margin: -6px -6px 12px -6px;
+            background: #1e293b;
+          }
+          .toolbar button {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px; font-weight: bold; cursor: pointer;
+            padding: 8px 18px; border-radius: 6px; border: none;
+          }
+          .toolbar .btn-print { background: #4f46e5; color: #fff; }
+          .toolbar .btn-close { background: #334155; color: #cbd5e1; }
+          @media print { .toolbar { display: none; } }
           .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
           .header-table td { border: none; padding: 2px 6px; vertical-align: top; }
           .company-name { font-size: 13px; font-weight: 900; }
@@ -177,6 +191,10 @@ export function printPassengerManifest(data: ManifestPrintData) {
         </style>
       </head>
       <body>
+        <div class="toolbar">
+          <button class="btn-close" onclick="window.close()">Cerrar</button>
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+        </div>
         <table class="header-table">
           <tr>
             <td style="width: 22%;">
@@ -266,15 +284,6 @@ export function printPassengerManifest(data: ManifestPrintData) {
           <div class="signature-box">CONDUCTOR</div>
           <div class="signature-box">S/ ${totalImporte.toFixed(2)}</div>
         </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              window.close();
-            }, 500);
-          }
-        </script>
       </body>
     </html>
   `);
@@ -342,6 +351,20 @@ export function printParcelManifest(trip: TripPrintData, parcels: ParcelPrintDat
             padding: 10px;
             background: #fff;
           }
+          .toolbar {
+            position: sticky; top: 0; z-index: 10;
+            display: flex; justify-content: flex-end; gap: 8px;
+            padding: 10px; margin: -10px -10px 16px -10px;
+            background: #1e293b;
+          }
+          .toolbar button {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px; font-weight: bold; cursor: pointer;
+            padding: 8px 18px; border-radius: 6px; border: none;
+          }
+          .toolbar .btn-print { background: #4f46e5; color: #fff; }
+          .toolbar .btn-close { background: #334155; color: #cbd5e1; }
+          @media print { .toolbar { display: none; } }
           .header-table {
             width: 100%;
             border-collapse: collapse;
@@ -440,6 +463,10 @@ export function printParcelManifest(trip: TripPrintData, parcels: ParcelPrintDat
         </style>
       </head>
       <body>
+        <div class="toolbar">
+          <button class="btn-close" onclick="window.close()">Cerrar</button>
+          <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
+        </div>
         <table class="header-table">
           <tr>
             <td style="width: 25%;">
@@ -536,15 +563,6 @@ export function printParcelManifest(trip: TripPrintData, parcels: ParcelPrintDat
             Firma del Conductor (Recepción de Carga)
           </div>
         </div>
-
-        <script>
-          window.onload = function() {
-            setTimeout(function() {
-              window.print();
-              window.close();
-            }, 500);
-          }
-        </script>
       </body>
     </html>
   `);
