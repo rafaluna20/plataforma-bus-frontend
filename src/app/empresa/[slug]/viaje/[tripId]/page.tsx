@@ -69,6 +69,7 @@ type TripDetail = {
     serviceMode: string;
     capacity: number;
     imageUrl: string | null;
+    imageUrls?: string[] | null;
     seatTemplate: any;
   };
 };
@@ -1449,6 +1450,7 @@ export default function EmpresaViajeDetailPage() {
         departureTime={trip.departureTime}
         plateNumber={vehicle.plateNumber || undefined}
         vehicleImageUrl={vehicle.imageUrl}
+        vehicleImageUrls={vehicle.imageUrls}
         onSaleSuccess={(receipt) => {
           // No hace falta tocar pasajeros/asientos a mano: la venta ya invalidó
           // la consulta compartida del manifiesto, se refresca sola.

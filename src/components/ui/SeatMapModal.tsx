@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo, type ReactNode } from 
 import {
   X, CheckCircle2, AlertCircle, Loader2,
   Banknote, CreditCard, ArrowRight, ArrowLeft, Pencil, Package, TicketCheck, Save, RotateCcw,
-  Users, RefreshCw, MapPin, Printer, Search
+  Users, RefreshCw, MapPin, Printer, Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { getCurrentUser, authFetch } from "@/lib/auth";
 import { calcTripPrice, API_URL } from "@/lib/config";
@@ -59,6 +59,7 @@ type SeatMapModalProps = {
   departureTime: string;
   plateNumber?: string;
   vehicleImageUrl?: string | null;
+  vehicleImageUrls?: string[] | null;
   onSaleSuccess?: (receipt: any) => void;
 };
 
@@ -1430,7 +1431,7 @@ export default function SeatMapModal({
   open, onClose, tripId, vehicleType, vehicleCapacity,
   seatTemplate,
   occupiedSeats: initialOccupied, waypoints, primaryColor, secondaryColor,
-  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, vehicleImageUrl, onSaleSuccess,
+  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, vehicleImageUrl, vehicleImageUrls, onSaleSuccess,
 }: SeatMapModalProps) {
 
   const isTwoDeck = vehicleType === "BUS_2P";
@@ -1449,6 +1450,24 @@ export default function SeatMapModal({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [vehiclePanelCollapsed, setVehiclePanelCollapsed] = useState(false);
   const [editMode, setEditMode] = useState(false);
+
+  // ─── Galería de fotos del vehículo (slider en el panel derecho) ───────────
+  const vehiclePhotos = useMemo(() => {
+    const gallery = (vehicleImageUrls || []).filter(Boolean);
+    if (gallery.length > 0) return gallery;
+    return vehicleImageUrl ? [vehicleImageUrl] : [];
+  }, [vehicleImageUrls, vehicleImageUrl]);
+  const [vehiclePhotoIndex, setVehiclePhotoIndex] = useState(0);
+  useEffect(() => {
+    setVehiclePhotoIndex(0);
+  }, [vehiclePhotos.length, tripId]);
+  useEffect(() => {
+    if (vehiclePhotos.length < 2) return;
+    const interval = setInterval(() => {
+      setVehiclePhotoIndex(prev => (prev + 1) % vehiclePhotos.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [vehiclePhotos.length]);
   const [seatLabels, setSeatLabels] = useState<Record<string, string>>(defaultLabels);
 
   // ─── Lista de pasajeros en sidebar — misma cache que el detalle del viaje;
@@ -2688,17 +2707,66 @@ export default function SeatMapModal({
         }`}
           style={{ background: "#080d1a" }}>
           <div className="flex-1 flex flex-col" style={{ width: "22.4rem" }}>
-            {/* Foto del vehículo (altura reducida 40%) */}
-            <div className="h-[30%] flex-shrink-0 relative border-b border-white/8 bg-slate-900/60">
-              <img
-                src={vehicleImageUrl || vehicleImages[vehicleType] || vehicleImages.BUS_1P}
-                alt={plateNumber || vehicleType}
-                className="w-full h-full object-cover"
-                onError={e => {
-                  (e.target as HTMLImageElement).src = vehicleImages.BUS_1P;
-                }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+            {/* Foto del vehículo (altura reducida 40%) — slider si hay varias fotos */}
+            <div className="h-[30%] flex-shrink-0 relative border-b border-white/8 bg-slate-900/60 group">
+              {vehiclePhotos.length > 0 ? (
+                vehiclePhotos.map((photo, i) => (
+                  <img
+                    key={photo + i}
+                    src={photo}
+                    alt={`${plateNumber || vehicleType} — foto ${i + 1}`}
+                    className="absolute inset-0 w-full h-full object-cover transition-opacity duration-700"
+                    style={{ opacity: i === vehiclePhotoIndex ? 1 : 0 }}
+                    onError={e => {
+                      (e.target as HTMLImageElement).src = vehicleImages.BUS_1P;
+                    }}
+                  />
+                ))
+              ) : (
+                <img
+                  src={vehicleImages[vehicleType] || vehicleImages.BUS_1P}
+                  alt={plateNumber || vehicleType}
+                  className="w-full h-full object-cover"
+                  onError={e => {
+                    (e.target as HTMLImageElement).src = vehicleImages.BUS_1P;
+                  }}
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent pointer-events-none" />
+
+              {vehiclePhotos.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setVehiclePhotoIndex(prev => (prev - 1 + vehiclePhotos.length) % vehiclePhotos.length)}
+                    className="absolute left-1.5 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                    aria-label="Foto anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVehiclePhotoIndex(prev => (prev + 1) % vehiclePhotos.length)}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded-full bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                    aria-label="Foto siguiente"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <div className="absolute bottom-1.5 left-0 right-0 flex items-center justify-center gap-1.5">
+                    {vehiclePhotos.map((_, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setVehiclePhotoIndex(i)}
+                        aria-label={`Ir a foto ${i + 1}`}
+                        className={`rounded-full transition-all ${
+                          i === vehiclePhotoIndex ? "w-3.5 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Info del vehículo (ocupa el espacio restante) */}

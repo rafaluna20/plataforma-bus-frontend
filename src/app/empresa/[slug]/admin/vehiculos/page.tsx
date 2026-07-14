@@ -21,11 +21,21 @@ type Vehicle = {
   isActive: boolean;
   createdAt: string;
   imageUrl?: string | null;
+  imageUrls?: string[] | null;
   seatTemplate?: any[];
   brand?: string | null;
   circulationCard?: string | null;
   insurancePolicy?: string | null;
 };
+
+const MAX_VEHICLE_PHOTOS = 5;
+
+function padImages(images: string[] | null | undefined, fallback?: string | null): string[] {
+  const base = images?.length ? images : (fallback ? [fallback] : []);
+  const padded = [...base];
+  while (padded.length < MAX_VEHICLE_PHOTOS) padded.push("");
+  return padded.slice(0, MAX_VEHICLE_PHOTOS);
+}
 
 const VEHICLE_TYPES = [
   { value: "MINIVAN",  label: "Minivan" },
@@ -48,7 +58,7 @@ const emptyForm = {
   vehicleType: "MINIVAN",
   serviceMode: "INTERPROVINCIAL",
   capacity: 12,
-  imageUrl: "",
+  imageUrls: Array(MAX_VEHICLE_PHOTOS).fill(""),
   brand: "",
   circulationCard: "",
   insurancePolicy: "",
@@ -110,7 +120,7 @@ export default function EmpresaAdminVehiculosPage() {
       vehicleType:  v.vehicleType,
       serviceMode:  v.serviceMode,
       capacity:     v.capacity,
-      imageUrl:     v.imageUrl || "",
+      imageUrls:    padImages(v.imageUrls, v.imageUrl),
       brand:            v.brand || "",
       circulationCard:  v.circulationCard || "",
       insurancePolicy:  v.insurancePolicy || "",
@@ -137,7 +147,13 @@ export default function EmpresaAdminVehiculosPage() {
 
     setSaving(true);
     try {
-      const payload: any = { companyId, ...form };
+      const cleanImages = form.imageUrls.filter(Boolean);
+      const payload: any = {
+        companyId,
+        ...form,
+        imageUrls: cleanImages,
+        imageUrl: cleanImages[0] || null,
+      };
       if (seatTemplate) payload.seatTemplate = seatTemplate;
 
       if (editingId) {
@@ -366,18 +382,41 @@ export default function EmpresaAdminVehiculosPage() {
             </div>
           </div>
 
-          {/* Imagen del vehículo */}
-          <ImageUploader
-            label="Foto del Vehículo"
-            hint="Se redimensionará a 800×400px y se convertirá a WebP. Recomendado: foto lateral del bus."
-            value={form.imageUrl}
-            onChange={url => setForm(f => ({ ...f, imageUrl: url }))}
-            maxWidth={800}
-            maxHeight={400}
-            quality={0.85}
-            fit="contain"
-            folder="vehiculos"
-          />
+          {/* Galería de fotos del vehículo */}
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs text-slate-400 font-medium block mb-0.5">
+                🖼️ Fotos del Vehículo (hasta {MAX_VEHICLE_PHOTOS})
+              </label>
+              <p className="text-xs text-slate-600">
+                Sube al menos 3 fotos para que se muestren en un slider en el panel de venta. La primera foto se usa como portada en el resto de la plataforma.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {form.imageUrls.map((url: string, index: number) => (
+                <div key={index} className="space-y-1.5">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Foto {index + 1}{index === 0 ? " (portada)" : ""}
+                  </p>
+                  <ImageUploader
+                    label={`Subir Foto ${index + 1}`}
+                    value={url}
+                    onChange={newUrl => {
+                      const imgs = [...form.imageUrls];
+                      imgs[index] = newUrl;
+                      setForm(f => ({ ...f, imageUrls: imgs }));
+                    }}
+                    maxWidth={800}
+                    maxHeight={400}
+                    quality={0.85}
+                    fit="contain"
+                    folder="vehiculos"
+                    hint="800×400px"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* Configurador visual de asientos */}
           <div className="border-t border-white/5 pt-4">
