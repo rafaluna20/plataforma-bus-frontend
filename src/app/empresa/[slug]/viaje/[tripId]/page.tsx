@@ -233,14 +233,14 @@ export default function EmpresaViajeDetailPage() {
     const sellers = new Set<string>();
 
     passengers.forEach(p => {
-      if (p.paymentStatus === "PAID" || p.paymentStatus === "PAID_DIGITAL") rev += p.price || 0;
-      else if (p.paymentStatus === "PENDING_CASH") pend += p.price || 0;
+      if (p.paymentStatus === "PAID" || p.paymentStatus === "PAID_DIGITAL") rev += Number(p.price || 0);
+      else if (p.paymentStatus === "PENDING_CASH") pend += Number(p.price || 0);
       if (p.seller?.id) sellers.add(p.seller.id);
     });
 
     let pRev = 0;
     parcels.forEach(p => {
-      pRev += p.totalPrice || 0;
+      pRev += Number(p.totalPrice || 0);
       if ((p as any).seller?.id) sellers.add((p as any).seller.id);
     });
 
