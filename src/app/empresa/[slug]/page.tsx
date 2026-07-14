@@ -1900,7 +1900,7 @@ export default function EmpresaPublicaPage() {
       <EmpresaBottomNav
         activeSection={activeSection}
         onNavigate={(id) => {
-          if (id === "menu") { setSidebarOpen(true); return; }
+          if (id === "menu") { setSidebarOpen(prev => !prev); return; }
           if (id === "mapa") { setActiveSection("mapa"); loadMapaViajes(); return; }
           setActiveSection(id as SidebarSection);
         }}
