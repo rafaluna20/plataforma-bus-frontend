@@ -57,7 +57,20 @@ type SeatMapModalProps = {
   routeName: string;
   departureTime: string;
   plateNumber?: string;
+  vehicleImageUrl?: string | null;
   onSaleSuccess?: (receipt: any) => void;
+};
+
+// ─── Panel del vehículo (foto + info) ─────────────────────────────────────────
+const vehicleTypeLabel: Record<string, string> = {
+  MINIVAN: "Minivan", BUS_1P: "Bus 1 Piso", BUS_2P: "Bus 2 Pisos", AUTO: "Auto",
+};
+
+const vehicleImages: Record<string, string> = {
+  BUS_2P: "https://i.imgur.com/8QkXqzP.png",
+  BUS_1P: "https://i.imgur.com/3nYcmEf.png",
+  MINIVAN: "https://i.imgur.com/7vQkLpN.png",
+  AUTO: "https://i.imgur.com/2xRmKjT.png",
 };
 
 // ─── Helpers (fuera del componente para no recrearse) ─────────────────────────
@@ -1395,7 +1408,7 @@ export default function SeatMapModal({
   open, onClose, tripId, vehicleType, vehicleCapacity,
   seatTemplate,
   occupiedSeats: initialOccupied, waypoints, primaryColor, secondaryColor,
-  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, onSaleSuccess,
+  companyName, companyLogoUrl, companyRuc, routeName, departureTime, plateNumber, vehicleImageUrl, onSaleSuccess,
 }: SeatMapModalProps) {
 
   const isTwoDeck = vehicleType === "BUS_2P";
@@ -1412,6 +1425,7 @@ export default function SeatMapModal({
   const [passengerDetailSeat, setPassengerDetailSeat] = useState<string | null>(null);
   const [sidebarMode, setSidebarMode] = useState<"pasajes" | "encomiendas" | "pasajeros" | "vendedores">("pasajes");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [vehiclePanelCollapsed, setVehiclePanelCollapsed] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [seatLabels, setSeatLabels] = useState<Record<string, string>>(defaultLabels);
 
@@ -2253,6 +2267,15 @@ export default function SeatMapModal({
                 <span className="text-xs font-extrabold" style={{ color: item.color }}>{item.count}</span>
               </div>
             ))}
+            {/* Ocultar/mostrar el panel del vehículo (solo desktop) */}
+            <button
+              onClick={() => setVehiclePanelCollapsed(v => !v)}
+              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
+              title={vehiclePanelCollapsed ? "Mostrar panel del vehículo" : "Ocultar panel del vehículo"}
+            >
+              <span className="text-xs font-medium">{vehiclePanelCollapsed ? "Mostrar vehículo" : "Ocultar vehículo"}</span>
+              {vehiclePanelCollapsed ? <ArrowLeft className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
+            </button>
           </div>
 
           {/* Contenedor que escala el bus para ocupar el 80% del ancho disponible */}
@@ -2637,6 +2660,44 @@ export default function SeatMapModal({
             </div>
           );
         })()}
+
+        {/* ── PANEL DERECHO: foto + info del vehículo (solo desktop) ─────────── */}
+        <div className={`hidden lg:flex flex-shrink-0 border-white/8 lg:flex-col overflow-hidden transition-[width] duration-200 ${
+          vehiclePanelCollapsed ? "w-0 border-l-0" : "w-64 border-l"
+        }`}
+          style={{ background: "#080d1a" }}>
+          <div className="flex-1 flex flex-col" style={{ width: "16rem" }}>
+            {/* Foto del vehículo (mitad superior) */}
+            <div className="h-1/2 flex-shrink-0 relative border-b border-white/8 bg-slate-900/60">
+              <img
+                src={vehicleImageUrl || vehicleImages[vehicleType] || vehicleImages.BUS_1P}
+                alt={plateNumber || vehicleType}
+                className="w-full h-full object-cover"
+                onError={e => {
+                  (e.target as HTMLImageElement).src = vehicleImages.BUS_1P;
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+            </div>
+
+            {/* Info del vehículo (mitad inferior) */}
+            <div className="h-1/2 flex-shrink-0 p-4 space-y-3 overflow-y-auto">
+              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Vehículo</p>
+              <div className="space-y-2">
+                {[
+                  { label: "Placa", value: plateNumber || "—" },
+                  { label: "Tipo", value: vehicleTypeLabel[vehicleType] || vehicleType },
+                  { label: "Capacidad", value: `${effectiveCapacity} asientos` },
+                ].map((item, i) => (
+                  <div key={i} className="flex justify-between items-center gap-3 p-2.5 rounded-lg bg-slate-800/40">
+                    <span className="text-slate-500 text-xs">{item.label}</span>
+                    <span className="font-bold text-sm text-white">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ─── MODAL DE VENTA ──────────────────────────────────────────────────── */}

@@ -1448,6 +1448,7 @@ export default function EmpresaViajeDetailPage() {
         routeName={trip.route.name}
         departureTime={trip.departureTime}
         plateNumber={vehicle.plateNumber || undefined}
+        vehicleImageUrl={vehicle.imageUrl}
         onSaleSuccess={(receipt) => {
           // No hace falta tocar pasajeros/asientos a mano: la venta ya invalidó
           // la consulta compartida del manifiesto, se refresca sola.
