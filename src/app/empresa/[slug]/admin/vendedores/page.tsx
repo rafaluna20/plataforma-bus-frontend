@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus, Users, AlertCircle, CheckCircle2, RefreshCw,
-  X, MapPin, ToggleLeft, ToggleRight, Loader2
+  X, MapPin, ToggleLeft, ToggleRight, Loader2, Pencil, Save
 } from "lucide-react";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
-import { getUsers, createSeller, toggleUser } from "@/lib/api/admin";
+import { getUsers, createSeller, updateUserProfile, toggleUser } from "@/lib/api/admin";
 import { getAllStations } from "@/lib/api/routes";
 
 type Seller = {
@@ -46,6 +46,7 @@ export default function AdminVendedoresPage() {
   const [success, setSuccess] = useState("");
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = creando
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -84,7 +85,23 @@ export default function AdminVendedoresPage() {
   }
 
   function openForm() {
+    setEditingId(null);
     setForm(emptyForm);
+    setFormError("");
+    setShowForm(true);
+  }
+
+  function openEdit(seller: Seller) {
+    setEditingId(seller.id);
+    setForm({
+      name: seller.name,
+      email: seller.email,
+      password: "",
+      stationId: seller.station?.id || "",
+      docType: seller.docType || "DNI",
+      docNum: seller.docNum || "",
+      phone: seller.phone || "",
+    });
     setFormError("");
     setShowForm(true);
   }
@@ -92,21 +109,41 @@ export default function AdminVendedoresPage() {
   async function saveSeller(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim() || !form.stationId) {
-      setFormError("Nombre, correo, contraseña y paradero son obligatorios.");
+
+    if (!form.name.trim()) {
+      setFormError("El nombre es obligatorio.");
       return;
     }
-    if (form.password.length < 8) {
-      setFormError("La contraseña debe tener al menos 8 caracteres.");
-      return;
+    if (!editingId) {
+      if (!form.email.trim() || !form.password.trim() || !form.stationId) {
+        setFormError("Correo, contraseña y paradero son obligatorios.");
+        return;
+      }
+      if (form.password.length < 8) {
+        setFormError("La contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      const data = await createSeller<any>({ ...form, companyId });
+      if (editingId) {
+        // EDITAR: solo datos de perfil (no email/password)
+        const data = await updateUserProfile<any>(editingId, {
+          name: form.name,
+          docType: form.docType,
+          docNum: form.docNum,
+          phone: form.phone,
+          stationId: form.stationId || null,
+        });
+        setSuccess(`✅ Vendedor ${data.user.name} actualizado exitosamente.`);
+      } else {
+        const data = await createSeller<any>({ ...form, companyId });
+        setSuccess(`✅ Vendedor ${data.user.name} creado exitosamente.`);
+      }
 
-      setSuccess(`✅ Vendedor ${data.user.name} creado exitosamente.`);
       setShowForm(false);
+      setEditingId(null);
       setForm(emptyForm);
       loadData();
       setTimeout(() => setSuccess(""), 4000);
@@ -181,9 +218,9 @@ export default function AdminVendedoresPage() {
           className="bg-slate-900/80 border border-indigo-500/30 rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
-              <Plus className="w-5 h-5 text-indigo-400" /> Crear Cuenta de Vendedor
+              <Plus className="w-5 h-5 text-indigo-400" /> {editingId ? "Editar Vendedor" : "Crear Cuenta de Vendedor"}
             </h2>
-            <button type="button" onClick={() => setShowForm(false)}
+            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
               <X className="w-5 h-5" />
             </button>
@@ -198,12 +235,15 @@ export default function AdminVendedoresPage() {
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Correo electrónico (Login) *</label>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Correo electrónico (Login) {editingId ? "" : "*"}</label>
               <input type="email" value={form.email}
+                disabled={!!editingId}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="vendedor@empresa.com"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors" />
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed" />
+              {editingId && <p className="text-[11px] text-slate-600 mt-1">El correo de acceso no se puede cambiar desde aquí.</p>}
             </div>
+            {!editingId && (
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">Contraseña inicial *</label>
               <input type="password" value={form.password}
@@ -211,8 +251,9 @@ export default function AdminVendedoresPage() {
                 placeholder="Mín. 8 caracteres"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors" />
             </div>
+            )}
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Asignar Paradero / Estación *</label>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Asignar Paradero / Estación {editingId ? "" : "*"}</label>
               <select value={form.stationId}
                 onChange={e => setForm(f => ({ ...f, stationId: e.target.value }))}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none">
@@ -251,14 +292,16 @@ export default function AdminVendedoresPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowForm(false)}
+            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}
               className="px-5 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
               Cancelar
             </button>
             <button type="submit" disabled={saving}
               className="px-6 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center gap-2 transition-all hover:opacity-90"
               style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creando...</> : <><Plus className="w-4 h-4" /> Crear Vendedor</>}
+              {saving
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {editingId ? "Guardando..." : "Creando..."}</>
+                : editingId ? <><Save className="w-4 h-4" /> Guardar Cambios</> : <><Plus className="w-4 h-4" /> Crear Vendedor</>}
             </button>
           </div>
         </form>
@@ -285,7 +328,7 @@ export default function AdminVendedoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeSellers.map(seller => (
-                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} />
+                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} />
                 ))}
               </div>
             </div>
@@ -298,7 +341,7 @@ export default function AdminVendedoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {inactiveSellers.map(seller => (
-                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} />
+                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} />
                 ))}
               </div>
             </div>
@@ -310,11 +353,12 @@ export default function AdminVendedoresPage() {
 }
 
 function SellerCard({
-  seller, toggling, onToggle
+  seller, toggling, onToggle, onEdit
 }: {
   seller: Seller;
   toggling: string | null;
   onToggle: (s: Seller) => void;
+  onEdit: (s: Seller) => void;
 }) {
   const isToggling = toggling === seller.id;
 
@@ -353,7 +397,12 @@ function SellerCard({
         )}
       </div>
 
-      <div className="px-3 py-2 border-t border-white/5 bg-slate-900/40 flex">
+      <div className="px-3 py-2 border-t border-white/5 bg-slate-900/40 flex items-center gap-1">
+        <button
+          onClick={() => onEdit(seller)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 hover:border-indigo-500/20 transition-all">
+          <Pencil className="w-3.5 h-3.5" /> Editar
+        </button>
         <button
           onClick={() => onToggle(seller)}
           disabled={isToggling}
