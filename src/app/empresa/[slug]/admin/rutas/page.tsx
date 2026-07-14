@@ -233,7 +233,19 @@ export default function EmpresaAdminRutasPage() {
     setStationsLoading(true);
     try {
       const data = await getAllStations<any>();
-      const allStations: Station[] = data.stations || [];
+      // El backend devuelve la ubicación como geometría PostGIS/GeoJSON
+      // (location.coordinates = [lng, lat]), no como campos latitude/longitude
+      // planos. Sin esta normalización, el editor de trazado y el flyTo de
+      // "editar estación" creen que ninguna estación tiene coordenadas.
+      const allStations: Station[] = (data.stations || []).map((s: any) => {
+        const coords = s.location?.coordinates;
+        const hasCoords = Array.isArray(coords) && coords.length === 2;
+        return {
+          ...s,
+          latitude: s.latitude ?? (hasCoords ? Number(coords[1]) : undefined),
+          longitude: s.longitude ?? (hasCoords ? Number(coords[0]) : undefined),
+        };
+      });
       setStations(allStations);
       setFilteredStations(allStations);
       const uniqueCities = [...new Set(allStations.map(s => s.city))].sort();
