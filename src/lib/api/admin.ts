@@ -21,6 +21,11 @@ export function createAdmin<T = any>(body: unknown) {
   return apiPost<T>(`/api/v1/admin/users/admin`, body, "Error al crear ADMIN");
 }
 
+/** Actualiza nombre/teléfono/documento/N° de licencia de un usuario de staff (no email/password/rol). */
+export function updateUserProfile<T = any>(userId: string, body: unknown) {
+  return apiPatch<T>(`/api/v1/admin/users/${userId}`, body, "Error al actualizar el perfil");
+}
+
 export function toggleUser<T = any>(userId: string, isActive: boolean) {
   return apiPatch<T>(`/api/v1/admin/users/${userId}/toggle`, { isActive }, "Error al cambiar estado");
 }

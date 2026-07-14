@@ -5,10 +5,10 @@ import { useParams } from "next/navigation";
 import {
   Plus, Truck, AlertCircle, CheckCircle2, RefreshCw,
   X, Phone, FileText, ToggleLeft, ToggleRight, Loader2,
-  Mail, IdCard, User
+  Mail, IdCard, User, Pencil, Save
 } from "lucide-react";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
-import { getUsers, createDriver, toggleUser } from "@/lib/api/admin";
+import { getUsers, createDriver, updateUserProfile, toggleUser } from "@/lib/api/admin";
 
 type Driver = {
   id: string;
@@ -44,6 +44,7 @@ export default function AdminConductoresPage() {
   const [success, setSuccess] = useState("");
 
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = creando
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState("");
@@ -78,7 +79,23 @@ export default function AdminConductoresPage() {
   }
 
   function openForm() {
+    setEditingId(null);
     setForm(emptyForm);
+    setFormError("");
+    setShowForm(true);
+  }
+
+  function openEdit(driver: Driver) {
+    setEditingId(driver.id);
+    setForm({
+      name: driver.name,
+      email: driver.email,
+      password: "",
+      docType: driver.docType || "DNI",
+      docNum: driver.docNum || "",
+      phone: driver.phone || "",
+      licenseNumber: driver.licenseNumber || "",
+    });
     setFormError("");
     setShowForm(true);
   }
@@ -86,32 +103,53 @@ export default function AdminConductoresPage() {
   async function saveDriver(e: React.FormEvent) {
     e.preventDefault();
     setFormError("");
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setFormError("Nombre, correo y contraseña son obligatorios.");
+
+    if (!form.name.trim()) {
+      setFormError("El nombre es obligatorio.");
       return;
     }
-    if (form.password.length < 8) {
-      setFormError("La contraseña debe tener al menos 8 caracteres.");
-      return;
+    if (!editingId) {
+      if (!form.email.trim() || !form.password.trim()) {
+        setFormError("Correo y contraseña son obligatorios.");
+        return;
+      }
+      if (form.password.length < 8) {
+        setFormError("La contraseña debe tener al menos 8 caracteres.");
+        return;
+      }
     }
 
     setSaving(true);
     try {
-      const body: any = {
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        companyId,
-      };
-      if (form.docType) body.docType = form.docType;
-      if (form.docNum) body.docNum = form.docNum;
-      if (form.phone) body.phone = form.phone;
-      if (form.licenseNumber) body.licenseNumber = form.licenseNumber;
+      if (editingId) {
+        // EDITAR: solo datos de perfil (no email/password)
+        const body: any = { name: form.name };
+        if (form.docType) body.docType = form.docType;
+        if (form.docNum) body.docNum = form.docNum;
+        if (form.phone) body.phone = form.phone;
+        body.licenseNumber = form.licenseNumber || null;
 
-      const data = await createDriver<any>(body);
+        const data = await updateUserProfile<any>(editingId, body);
+        setSuccess(`✅ Conductor ${data.user.name} actualizado exitosamente.`);
+      } else {
+        // CREAR
+        const body: any = {
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          companyId,
+        };
+        if (form.docType) body.docType = form.docType;
+        if (form.docNum) body.docNum = form.docNum;
+        if (form.phone) body.phone = form.phone;
+        if (form.licenseNumber) body.licenseNumber = form.licenseNumber;
 
-      setSuccess(`✅ Conductor ${data.user.name} creado exitosamente.`);
+        const data = await createDriver<any>(body);
+        setSuccess(`✅ Conductor ${data.user.name} creado exitosamente.`);
+      }
+
       setShowForm(false);
+      setEditingId(null);
       setForm(emptyForm);
       loadData();
       setTimeout(() => setSuccess(""), 4000);
@@ -186,9 +224,9 @@ export default function AdminConductoresPage() {
           className="bg-slate-900/80 border border-cyan-500/30 rounded-2xl p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-bold text-white text-lg flex items-center gap-2">
-              <Truck className="w-5 h-5 text-cyan-400" /> Registrar Conductor
+              <Truck className="w-5 h-5 text-cyan-400" /> {editingId ? "Editar Conductor" : "Registrar Conductor"}
             </h2>
-            <button type="button" onClick={() => setShowForm(false)}
+            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors">
               <X className="w-5 h-5" />
             </button>
@@ -206,13 +244,16 @@ export default function AdminConductoresPage() {
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">
-                <Mail className="w-3 h-3 inline mr-1" />Correo electrónico (Login) *
+                <Mail className="w-3 h-3 inline mr-1" />Correo electrónico (Login) {editingId ? "" : "*"}
               </label>
               <input type="email" value={form.email}
+                disabled={!!editingId}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="conductor@empresa.com"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none transition-colors" />
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed" />
+              {editingId && <p className="text-[11px] text-slate-600 mt-1">El correo de acceso no se puede cambiar desde aquí.</p>}
             </div>
+            {!editingId && (
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">Contraseña inicial *</label>
               <input type="password" value={form.password}
@@ -220,6 +261,7 @@ export default function AdminConductoresPage() {
                 placeholder="Mín. 8 caracteres"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none transition-colors" />
             </div>
+            )}
             <div>
               <label className="text-xs text-slate-400 mb-1.5 block font-medium">
                 <Phone className="w-3 h-3 inline mr-1" />Teléfono
@@ -266,14 +308,16 @@ export default function AdminConductoresPage() {
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={() => setShowForm(false)}
+            <button type="button" onClick={() => { setShowForm(false); setEditingId(null); }}
               className="px-5 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
               Cancelar
             </button>
             <button type="submit" disabled={saving}
               className="px-6 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center gap-2 transition-all hover:opacity-90"
               style={{ background: "linear-gradient(135deg, #06b6d4, #0891b2)" }}>
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creando...</> : <><Plus className="w-4 h-4" /> Crear Conductor</>}
+              {saving
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> {editingId ? "Guardando..." : "Creando..."}</>
+                : editingId ? <><Save className="w-4 h-4" /> Guardar Cambios</> : <><Plus className="w-4 h-4" /> Crear Conductor</>}
             </button>
           </div>
         </form>
@@ -300,7 +344,7 @@ export default function AdminConductoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeDrivers.map(driver => (
-                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} />
+                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} />
                 ))}
               </div>
             </div>
@@ -313,7 +357,7 @@ export default function AdminConductoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {inactiveDrivers.map(driver => (
-                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} />
+                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} />
                 ))}
               </div>
             </div>
@@ -325,11 +369,12 @@ export default function AdminConductoresPage() {
 }
 
 function DriverCard({
-  driver, toggling, onToggle
+  driver, toggling, onToggle, onEdit
 }: {
   driver: Driver;
   toggling: string | null;
   onToggle: (d: Driver) => void;
+  onEdit: (d: Driver) => void;
 }) {
   const isToggling = toggling === driver.id;
 
@@ -377,7 +422,12 @@ function DriverCard({
         </div>
       </div>
 
-      <div className="px-3 py-2 border-t border-white/5 bg-slate-900/40 flex">
+      <div className="px-3 py-2 border-t border-white/5 bg-slate-900/40 flex items-center gap-1">
+        <button
+          onClick={() => onEdit(driver)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 hover:border-cyan-500/20 transition-all">
+          <Pencil className="w-3.5 h-3.5" /> Editar
+        </button>
         <button
           onClick={() => onToggle(driver)}
           disabled={isToggling}
