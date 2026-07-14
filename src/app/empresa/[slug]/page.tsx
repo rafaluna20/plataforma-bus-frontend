@@ -696,7 +696,7 @@ export default function EmpresaPublicaPage() {
             <div className="fixed inset-0 bg-black/60 lg:hidden z-[-1]" onClick={() => setSidebarOpen(false)} />
           )}
 
-          <div className="bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-hidden h-full lg:h-auto">
+          <div className="bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-2xl overflow-y-auto overflow-x-hidden h-full lg:h-auto flex flex-col">
 
             {/* Banner de la empresa */}
             <div className="h-24 relative"
