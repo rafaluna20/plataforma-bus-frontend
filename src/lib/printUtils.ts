@@ -144,6 +144,10 @@ export function printPassengerManifest(data: ManifestPrintData) {
     `${b.city ? b.city.toUpperCase() + ": " : ""}${b.address}${b.phone ? ` Cel.: ${b.phone}` : ""}`
   ).join("<br />");
 
+  const field = (label: string, value: string) =>
+    `<div class="field"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
+  const blank = (placeholder: string) => `<span class="blank">${placeholder}</span>`;
+
   win.document.write(`
     <!DOCTYPE html>
     <html lang="es">
@@ -152,12 +156,13 @@ export function printPassengerManifest(data: ManifestPrintData) {
         <title>Manifiesto de Usuarios - ${trip.origin} / ${trip.destination}</title>
         <style>
           @page { size: A4 portrait; margin: 10mm; }
-          * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000; }
-          body { padding: 6px; background: #fff; font-size: 10px; }
+          * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          body { padding: 8px; background: #fff; font-size: 10.5px; }
+
           .toolbar {
             position: sticky; top: 0; z-index: 10;
             display: flex; justify-content: flex-end; gap: 8px;
-            padding: 10px 6px; margin: -6px -6px 12px -6px;
+            padding: 10px; margin: -8px -8px 14px -8px;
             background: #1e293b;
           }
           .toolbar button {
@@ -168,26 +173,46 @@ export function printPassengerManifest(data: ManifestPrintData) {
           .toolbar .btn-print { background: #4f46e5; color: #fff; }
           .toolbar .btn-close { background: #334155; color: #cbd5e1; }
           @media print { .toolbar { display: none; } }
-          .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-          .header-table td { border: none; padding: 2px 6px; vertical-align: top; }
-          .company-name { font-size: 13px; font-weight: 900; }
-          .addr-block { font-size: 9px; line-height: 1.5; }
-          .id-box { border: 1px solid #000; }
-          .id-box td { border: 1px solid #000; padding: 4px 8px; text-align: center; font-size: 10px; }
-          .id-box .title { font-weight: bold; font-size: 11px; }
 
-          .info-table { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 8px; font-size: 10px; }
-          .info-table td { border: 1px solid #000; padding: 3px 6px; }
-          .info-label { font-weight: bold; white-space: nowrap; width: 1%; }
-          .info-val { font-weight: bold; }
-          .blank { color: #999; }
+          .blank { color: #94a3b8; font-weight: 400; }
 
-          .manifest-table { width: 100%; border-collapse: collapse; font-size: 9px; }
-          .manifest-table th, .manifest-table td { border: 1px solid #000; padding: 3px 5px; text-align: left; }
-          .manifest-table th { background: #eee; font-weight: bold; text-transform: uppercase; font-size: 8px; }
+          /* ── Encabezado ─────────────────────────────────────────────── */
+          .doc-header { display: flex; align-items: stretch; gap: 12px; padding-bottom: 10px; border-bottom: 2.5px solid #1e293b; margin-bottom: 10px; }
+          .doc-header .logo-col { flex: 0 0 130px; }
+          .doc-header .logo-col img { max-width: 122px; max-height: 54px; object-fit: contain; display: block; margin-bottom: 4px; }
+          .doc-header .company-name { font-size: 14px; font-weight: 800; letter-spacing: .2px; line-height: 1.25; }
+          .doc-header .addr-col { flex: 1; font-size: 8.5px; line-height: 1.65; color: #334155; padding-top: 2px; }
+          .doc-header .addr-col b { color: #0f172a; }
+          .doc-header .id-col { flex: 0 0 185px; border: 1.5px solid #1e293b; border-radius: 6px; overflow: hidden; text-align: center; align-self: flex-start; }
+          .doc-header .id-col .ruc { font-size: 10px; font-weight: 700; padding: 5px 6px; border-bottom: 1px solid #1e293b; background: #f1f5f9; }
+          .doc-header .id-col .title { font-size: 10.5px; font-weight: 800; padding: 6px 6px; border-bottom: 1px solid #1e293b; letter-spacing: .3px; }
+          .doc-header .id-col .num { font-size: 15px; font-weight: 800; padding: 7px 6px; }
 
-          .footer-section { margin-top: 24px; display: flex; justify-content: space-between; font-size: 10px; }
-          .signature-box { width: 30%; text-align: center; border-top: 1px solid #000; padding-top: 6px; }
+          /* ── Ficha del viaje ────────────────────────────────────────── */
+          .info-card { border: 1.5px solid #1e293b; border-radius: 6px; overflow: hidden; margin-bottom: 10px; }
+          .info-top { display: flex; border-bottom: 1px solid #94a3b8; }
+          .info-top .crew { flex: 1; }
+          .crew-row, .full-row { display: flex; border-bottom: 1px solid #e2e8f0; }
+          .info-card > .crew-row:last-child, .info-card > .full-row:last-child { border-bottom: none; }
+          .field { flex: 1; display: flex; align-items: baseline; gap: 5px; padding: 4.5px 8px; border-right: 1px solid #e2e8f0; overflow: hidden; }
+          .field:last-child { border-right: none; }
+          .field .lbl { font-size: 7.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: #64748b; white-space: nowrap; }
+          .field .val { font-size: 10px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .info-top .sunat { flex: 0 0 165px; border-left: 1px solid #94a3b8; display: flex; align-items: center; justify-content: center; text-align: center; padding: 6px; font-size: 7.5px; color: #475569; background: #f8fafc; line-height: 1.4; }
+          .info-top .sunat strong { display: block; font-size: 9.5px; color: #0f172a; margin-top: 3px; }
+
+          /* ── Tabla de pasajeros ─────────────────────────────────────── */
+          .pax-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          .pax-table th { background: #1e293b; color: #fff; font-weight: 700; text-transform: uppercase; font-size: 7.5px; letter-spacing: .2px; padding: 5px; text-align: left; }
+          .pax-table td { padding: 4px 5px; border-bottom: 1px solid #e2e8f0; }
+          .pax-table tr:nth-child(even) td { background: #f8fafc; }
+
+          /* ── Pie ────────────────────────────────────────────────────── */
+          .doc-footer { margin-top: 22px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+          .sign-box { flex: 1; text-align: center; border-top: 1.5px solid #1e293b; padding-top: 6px; font-size: 9px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: .3px; }
+          .total-box { flex: 0 0 auto; border: 1.5px solid #1e293b; border-radius: 6px; padding: 7px 18px; text-align: center; background: #f1f5f9; }
+          .total-box .lbl { font-size: 7.5px; text-transform: uppercase; letter-spacing: .3px; color: #64748b; font-weight: 700; }
+          .total-box .val { font-size: 15px; font-weight: 800; color: #0f172a; }
         </style>
       </head>
       <body>
@@ -195,72 +220,64 @@ export function printPassengerManifest(data: ManifestPrintData) {
           <button class="btn-close" onclick="window.close()">Cerrar</button>
           <button class="btn-print" onclick="window.print()">🖨️ Imprimir</button>
         </div>
-        <table class="header-table">
-          <tr>
-            <td style="width: 22%;">
-              ${company.logoUrl
-                ? `<img src="${company.logoUrl}" alt="${company.tradeName}" style="max-height: 50px; max-width: 140px; object-fit: contain;" /><br />`
-                : ""}
-              <span class="company-name">${company.tradeName.toUpperCase()}</span>
-            </td>
-            <td style="width: 56%;" class="addr-block">
-              ${company.fiscalAddress ? `DOM. FISCAL: ${company.fiscalAddress}<br />` : ""}
-              ${branchLines}${branchLines ? "<br />" : ""}
-              ${company.contactEmail ? `E-MAIL: ${company.contactEmail}` : ""}${company.phone ? ` CEL.: ${company.phone}` : ""}
-            </td>
-            <td style="width: 22%;">
-              <table class="id-box" style="width:100%;">
-                <tr><td>RUC: ${company.ruc}</td></tr>
-                <tr><td class="title">MANIFIESTO DE USUARIOS</td></tr>
-                <tr><td>N° ${trip.manifestNumber || "<span class=\"blank\">pendiente</span>"}</td></tr>
-              </table>
-            </td>
-          </tr>
-        </table>
 
-        <table class="info-table">
-          <tr>
-            <td class="info-label">CONDUCTOR</td>
-            <td class="info-val">${trip.driver?.name || '<span class="blank">___________________</span>'}</td>
-            <td class="info-label">LICENCIA</td>
-            <td class="info-val">${trip.driver?.licenseNumber || '<span class="blank">___________</span>'}</td>
-            <td rowspan="3" style="width: 22%; text-align: center; font-size: 8px;">
+        <div class="doc-header">
+          <div class="logo-col">
+            ${company.logoUrl ? `<img src="${company.logoUrl}" alt="${company.tradeName}" />` : ""}
+            <div class="company-name">${company.tradeName.toUpperCase()}</div>
+          </div>
+          <div class="addr-col">
+            ${company.fiscalAddress ? `<b>DOM. FISCAL:</b> ${company.fiscalAddress}<br />` : ""}
+            ${branchLines}${branchLines ? "<br />" : ""}
+            ${company.contactEmail ? `<b>E-MAIL:</b> ${company.contactEmail}` : ""}${company.phone ? ` &nbsp; <b>CEL.:</b> ${company.phone}` : ""}
+          </div>
+          <div class="id-col">
+            <div class="ruc">RUC: ${company.ruc}</div>
+            <div class="title">MANIFIESTO DE USUARIOS</div>
+            <div class="num">N° ${trip.manifestNumber || blank("pendiente")}</div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <div class="info-top">
+            <div class="crew">
+              <div class="crew-row">
+                ${field("Conductor", trip.driver?.name || blank("___________________"))}
+                ${field("Licencia", trip.driver?.licenseNumber || blank("___________"))}
+              </div>
+              <div class="crew-row">
+                ${field("Copiloto", trip.copilotName || blank("___________________"))}
+                ${field("Licencia", trip.copilotLicense || blank("___________"))}
+              </div>
+              <div class="crew-row">
+                ${field("Auxiliar", trip.auxiliarName || blank("___________________"))}
+              </div>
+            </div>
+            <div class="sunat">
               ${company.sunatPrintAuthorization
-                ? `SUNAT N° DE AUTORIZACIÓN<br />DE IMPRESIÓN:<br /><strong>${company.sunatPrintAuthorization}</strong>`
-                : '<span class="blank">Sin N° de autorización SUNAT configurado</span>'}
-            </td>
-          </tr>
-          <tr>
-            <td class="info-label">COPILOTO</td>
-            <td class="info-val">${trip.copilotName || '<span class="blank">___________________</span>'}</td>
-            <td class="info-label">LICENCIA</td>
-            <td class="info-val">${trip.copilotLicense || '<span class="blank">___________</span>'}</td>
-          </tr>
-          <tr>
-            <td class="info-label">AUXILIAR</td>
-            <td class="info-val" colspan="3">${trip.auxiliarName || '<span class="blank">___________________</span>'}</td>
-          </tr>
-          <tr>
-            <td class="info-label">PLACA</td>
-            <td class="info-val">${vehicle.plateNumber}</td>
-            <td class="info-label">MARCA</td>
-            <td class="info-val" colspan="2">${vehicle.brand || '<span class="blank">-</span>'} &nbsp;&nbsp; <span class="info-label">TARJETA ÚNICA DE CIRCULACIÓN:</span> ${vehicle.circulationCard || '<span class="blank">-</span>'}</td>
-          </tr>
-          <tr>
-            <td class="info-label">LUGAR ORIGEN</td>
-            <td class="info-val">${trip.origin.toUpperCase()}</td>
-            <td class="info-label">LUGAR DESTINO</td>
-            <td class="info-val" colspan="2">${trip.destination.toUpperCase()} &nbsp;&nbsp; <span class="info-label">FECHA VIAJE:</span> ${dateStr}</td>
-          </tr>
-          <tr>
-            <td class="info-label">CANT. ASIENTOS</td>
-            <td class="info-val">${vehicle.capacity}</td>
-            <td class="info-label">CANT. EMBARCADOS</td>
-            <td class="info-val" colspan="2">${sortedPassengers.length} &nbsp;&nbsp; <span class="info-label">NRO PÓLIZA:</span> ${vehicle.insurancePolicy || '<span class="blank">-</span>'} &nbsp;&nbsp; <span class="info-label">HORA VIAJE:</span> ${timeStr}</td>
-          </tr>
-        </table>
+                ? `SUNAT N° DE AUTORIZACIÓN<br />DE IMPRESIÓN<br /><strong>${company.sunatPrintAuthorization}</strong>`
+                : blank("Sin N° de autorización SUNAT configurado")}
+            </div>
+          </div>
+          <div class="full-row">
+            ${field("Placa", vehicle.plateNumber)}
+            ${field("Marca", vehicle.brand || blank("-"))}
+            ${field("Tarjeta Única de Circulación", vehicle.circulationCard || blank("-"))}
+          </div>
+          <div class="full-row">
+            ${field("Lugar Origen", trip.origin.toUpperCase())}
+            ${field("Lugar Destino", trip.destination.toUpperCase())}
+            ${field("Fecha Viaje", dateStr)}
+          </div>
+          <div class="full-row">
+            ${field("Cant. Asientos", String(vehicle.capacity))}
+            ${field("Cant. Embarcados", String(sortedPassengers.length))}
+            ${field("Nro Póliza", vehicle.insurancePolicy || blank("-"))}
+            ${field("Hora Viaje", timeStr)}
+          </div>
+        </div>
 
-        <table class="manifest-table">
+        <table class="pax-table">
           <thead>
             <tr>
               <th style="width:5%; text-align:center;">Asi</th>
@@ -275,14 +292,17 @@ export function printPassengerManifest(data: ManifestPrintData) {
             </tr>
           </thead>
           <tbody>
-            ${rowsHtml || `<tr><td colspan="9" style="text-align:center; padding:16px; color:#555;">No hay pasajeros registrados para este viaje.</td></tr>`}
+            ${rowsHtml || `<tr><td colspan="9" style="text-align:center; padding:16px; color:#64748b;">No hay pasajeros registrados para este viaje.</td></tr>`}
           </tbody>
         </table>
 
-        <div class="footer-section">
-          <div class="signature-box">V°B° EMPRESA</div>
-          <div class="signature-box">CONDUCTOR</div>
-          <div class="signature-box">S/ ${totalImporte.toFixed(2)}</div>
+        <div class="doc-footer">
+          <div class="sign-box">V°B° Empresa</div>
+          <div class="sign-box">Conductor</div>
+          <div class="total-box">
+            <div class="lbl">Total Recaudado</div>
+            <div class="val">S/ ${totalImporte.toFixed(2)}</div>
+          </div>
         </div>
       </body>
     </html>
