@@ -606,21 +606,21 @@ export default function EmpresaViajeDetailPage() {
                     <p className="text-xs text-slate-400 font-medium">Recaudado</p>
                     <Banknote className="w-4 h-4 text-emerald-400" />
                   </div>
-                  <p className="text-xl font-bold text-white">S/ {totalRevenue.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-white">S/ {Number(totalRevenue).toFixed(2)}</p>
                 </div>
                 <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
                   <div className="flex justify-between items-start mb-1">
                     <p className="text-xs text-slate-400 font-medium">Por Cobrar</p>
                     <AlertCircle className="w-4 h-4 text-amber-400" />
                   </div>
-                  <p className="text-xl font-bold text-white">S/ {pendingRevenue.toFixed(2)}</p>
+                  <p className="text-xl font-bold text-white">S/ {Number(pendingRevenue).toFixed(2)}</p>
                 </div>
                 <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
                   <div className="flex justify-between items-start mb-1">
                     <p className="text-xs text-slate-400 font-medium">Encomiendas</p>
                     <Package className="w-4 h-4 text-indigo-400" />
                   </div>
-                  <p className="text-xl font-bold text-white">{parcels.length} <span className="text-xs font-normal text-slate-500">(S/ {parcelsRevenue.toFixed(2)})</span></p>
+                  <p className="text-xl font-bold text-white">{parcels.length} <span className="text-xs font-normal text-slate-500">(S/ {Number(parcelsRevenue).toFixed(2)})</span></p>
                 </div>
                 <div className="bg-slate-900/60 border border-white/5 rounded-xl p-4 flex flex-col justify-center">
                   <div className="flex justify-between items-start mb-1">
