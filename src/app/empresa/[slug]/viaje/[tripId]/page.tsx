@@ -526,6 +526,43 @@ export default function EmpresaViajeDetailPage() {
           {/* ── COLUMNA IZQUIERDA (2/3) ──────────────────────────────────── */}
           <div className="lg:col-span-2 space-y-5">
 
+            {/* Hero */}
+            <div className="relative rounded-2xl overflow-hidden border border-white/8 bg-slate-900/60" style={{ height: "280px" }}>
+              <img
+                src={vehicleImg}
+                alt={typeLabel}
+                className="w-full h-full object-cover"
+                onError={e => {
+                  const img = e.target as HTMLImageElement;
+                  img.src = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='280' viewBox='0 0 800 280'%3E%3Crect width='800' height='280' fill='%231e293b'/%3E%3Ctext x='400' y='150' text-anchor='middle' fill='%2364748b' font-size='48'%3E🚌%3C/text%3E%3C/svg%3E`;
+                }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+              <div className="absolute top-4 left-4 flex gap-2">
+                <span className="px-3 py-1 rounded-full text-xs font-bold bg-slate-800/80 text-slate-300 border border-white/10">
+                  {typeLabel}
+                </span>
+              </div>
+              <div className="absolute top-4 right-4 flex gap-2">
+                <button
+                  onClick={() => navigator.share?.({ title: company.tradeName, url: window.location.href }).catch(() => {})}
+                  className="p-2 rounded-full bg-slate-800/80 border border-white/10 text-slate-400 hover:text-white transition-colors">
+                  <Share2 className="w-4 h-4" />
+                </button>
+                <button className="p-2 rounded-full bg-slate-800/80 border border-white/10 text-slate-400 hover:text-red-400 transition-colors">
+                  <Heart className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="absolute bottom-4 left-4 flex items-center gap-2">
+                {company.logoUrl && (
+                  <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/20 bg-white flex items-center justify-center p-1 shadow-md">
+                    <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain" />
+                  </div>
+                )}
+                <span className="text-white font-bold text-sm drop-shadow">{company.tradeName}</span>
+              </div>
+            </div>
+
             {/* Header Compacto Operacional */}
             <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 backdrop-blur-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
