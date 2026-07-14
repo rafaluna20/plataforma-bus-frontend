@@ -5,10 +5,10 @@ import { useParams } from "next/navigation";
 import {
   Plus, Truck, AlertCircle, CheckCircle2, RefreshCw,
   X, Phone, FileText, ToggleLeft, ToggleRight, Loader2,
-  Mail, IdCard, User, Pencil, Save
+  Mail, IdCard, User, Pencil, Save, Trash2
 } from "lucide-react";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
-import { getUsers, createDriver, updateUserProfile, toggleUser } from "@/lib/api/admin";
+import { getUsers, createDriver, updateUserProfile, toggleUser, deleteUser } from "@/lib/api/admin";
 
 type Driver = {
   id: string;
@@ -50,6 +50,8 @@ export default function AdminConductoresPage() {
   const [formError, setFormError] = useState("");
 
   const [toggling, setToggling] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { loadData(); }, [slugStr]);
 
@@ -175,6 +177,21 @@ export default function AdminConductoresPage() {
     }
   }
 
+  async function deleteDriver(id: string) {
+    setDeleting(true);
+    try {
+      await deleteUser(id);
+      setSuccess("✅ Conductor eliminado.");
+      setDeleteConfirm(null);
+      loadData();
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const activeDrivers = drivers.filter(d => d.isActive);
   const inactiveDrivers = drivers.filter(d => !d.isActive);
 
@@ -217,6 +234,41 @@ export default function AdminConductoresPage() {
           <button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button>
         </div>
       )}
+
+      {/* ── Modal de confirmación eliminar ──────────────────────────────────── */}
+      {deleteConfirm && (() => {
+        const driver = drivers.find(d => d.id === deleteConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-red-500/10 rounded-xl">
+                  <Trash2 className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white">Eliminar conductor</h3>
+                  <p className="text-slate-400 text-sm">Esta acción no se puede deshacer</p>
+                </div>
+              </div>
+              <p className="text-slate-300 text-sm">
+                ¿Confirmas que deseas eliminar a <span className="font-bold text-white">{driver?.name}</span>?
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => deleteDriver(deleteConfirm)} disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}>
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Formulario */}
       {showForm && (
@@ -344,7 +396,7 @@ export default function AdminConductoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeDrivers.map(driver => (
-                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} />
+                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} onDelete={setDeleteConfirm} />
                 ))}
               </div>
             </div>
@@ -357,7 +409,7 @@ export default function AdminConductoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {inactiveDrivers.map(driver => (
-                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} />
+                  <DriverCard key={driver.id} driver={driver} toggling={toggling} onToggle={toggleDriver} onEdit={openEdit} onDelete={setDeleteConfirm} />
                 ))}
               </div>
             </div>
@@ -369,12 +421,13 @@ export default function AdminConductoresPage() {
 }
 
 function DriverCard({
-  driver, toggling, onToggle, onEdit
+  driver, toggling, onToggle, onEdit, onDelete
 }: {
   driver: Driver;
   toggling: string | null;
   onToggle: (d: Driver) => void;
   onEdit: (d: Driver) => void;
+  onDelete: (id: string) => void;
 }) {
   const isToggling = toggling === driver.id;
 
@@ -442,6 +495,11 @@ function DriverCard({
               ? <><ToggleRight className="w-3.5 h-3.5" /> Desactivar</>
               : <><ToggleLeft className="w-3.5 h-3.5" /> Activar</>
           }
+        </button>
+        <button
+          onClick={() => onDelete(driver.id)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent text-slate-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 transition-all ml-auto">
+          <Trash2 className="w-3.5 h-3.5" /> Eliminar
         </button>
       </div>
     </div>

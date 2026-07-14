@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPatch } from "./client";
+import { apiGet, apiPost, apiPatch, apiDelete } from "./client";
 
 export function getUsers<T = any>(params: { companyId?: string; role?: string; limit?: number }) {
   const query = new URLSearchParams({
@@ -24,6 +24,11 @@ export function createAdmin<T = any>(body: unknown) {
 /** Actualiza nombre/teléfono/documento/N° de licencia de un usuario de staff (no email/password/rol). */
 export function updateUserProfile<T = any>(userId: string, body: unknown) {
   return apiPatch<T>(`/api/v1/admin/users/${userId}`, body, "Error al actualizar el perfil");
+}
+
+/** Elimina (soft delete) la cuenta de un usuario de staff. */
+export function deleteUser<T = any>(userId: string) {
+  return apiDelete<T>(`/api/v1/admin/users/${userId}`, "Error al eliminar el usuario");
 }
 
 export function toggleUser<T = any>(userId: string, isActive: boolean) {

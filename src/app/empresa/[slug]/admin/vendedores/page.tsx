@@ -4,10 +4,10 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Plus, Users, AlertCircle, CheckCircle2, RefreshCw,
-  X, MapPin, ToggleLeft, ToggleRight, Loader2, Pencil, Save
+  X, MapPin, ToggleLeft, ToggleRight, Loader2, Pencil, Save, Trash2
 } from "lucide-react";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
-import { getUsers, createSeller, updateUserProfile, toggleUser } from "@/lib/api/admin";
+import { getUsers, createSeller, updateUserProfile, toggleUser, deleteUser } from "@/lib/api/admin";
 import { getAllStations } from "@/lib/api/routes";
 
 type Seller = {
@@ -52,6 +52,8 @@ export default function AdminVendedoresPage() {
   const [formError, setFormError] = useState("");
 
   const [toggling, setToggling] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { loadData(); }, [slugStr]);
 
@@ -169,6 +171,21 @@ export default function AdminVendedoresPage() {
     }
   }
 
+  async function deleteSeller(id: string) {
+    setDeleting(true);
+    try {
+      await deleteUser(id);
+      setSuccess("✅ Vendedor eliminado.");
+      setDeleteConfirm(null);
+      loadData();
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const activeSellers = sellers.filter(s => s.isActive);
   const inactiveSellers = sellers.filter(s => !s.isActive);
 
@@ -211,6 +228,41 @@ export default function AdminVendedoresPage() {
           <button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button>
         </div>
       )}
+
+      {/* ── Modal de confirmación eliminar ──────────────────────────────────── */}
+      {deleteConfirm && (() => {
+        const seller = sellers.find(s => s.id === deleteConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
+            <div className="bg-slate-900 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-red-500/10 rounded-xl">
+                  <Trash2 className="w-6 h-6 text-red-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white">Eliminar vendedor</h3>
+                  <p className="text-slate-400 text-sm">Esta acción no se puede deshacer</p>
+                </div>
+              </div>
+              <p className="text-slate-300 text-sm">
+                ¿Confirmas que deseas eliminar a <span className="font-bold text-white">{seller?.name}</span>?
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteConfirm(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white text-sm transition-colors">
+                  Cancelar
+                </button>
+                <button onClick={() => deleteSeller(deleteConfirm)} disabled={deleting}
+                  className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                  style={{ background: "linear-gradient(135deg, #ef4444, #dc2626)" }}>
+                  {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Formulario */}
       {showForm && (
@@ -328,7 +380,7 @@ export default function AdminVendedoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {activeSellers.map(seller => (
-                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} />
+                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} onDelete={setDeleteConfirm} />
                 ))}
               </div>
             </div>
@@ -341,7 +393,7 @@ export default function AdminVendedoresPage() {
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {inactiveSellers.map(seller => (
-                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} />
+                  <SellerCard key={seller.id} seller={seller} toggling={toggling} onToggle={toggleSeller} onEdit={openEdit} onDelete={setDeleteConfirm} />
                 ))}
               </div>
             </div>
@@ -353,12 +405,13 @@ export default function AdminVendedoresPage() {
 }
 
 function SellerCard({
-  seller, toggling, onToggle, onEdit
+  seller, toggling, onToggle, onEdit, onDelete
 }: {
   seller: Seller;
   toggling: string | null;
   onToggle: (s: Seller) => void;
   onEdit: (s: Seller) => void;
+  onDelete: (id: string) => void;
 }) {
   const isToggling = toggling === seller.id;
 
@@ -417,6 +470,11 @@ function SellerCard({
               ? <><ToggleRight className="w-3.5 h-3.5" /> Desactivar</>
               : <><ToggleLeft className="w-3.5 h-3.5" /> Activar</>
           }
+        </button>
+        <button
+          onClick={() => onDelete(seller.id)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-transparent text-slate-400 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 transition-all ml-auto">
+          <Trash2 className="w-3.5 h-3.5" /> Eliminar
         </button>
       </div>
     </div>
