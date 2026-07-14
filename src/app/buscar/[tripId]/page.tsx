@@ -99,6 +99,8 @@ export default function TripDetailPage() {
   const [passengerDocType, setPassengerDocType] = useState("DNI");
   const [passengerDocNum, setPassengerDocNum] = useState("");
   const [passengerPhone, setPassengerPhone] = useState("");
+  const [passengerAge, setPassengerAge] = useState("");
+  const [observations, setObservations] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "digital">("cash");
   const [bookingSuccess, setBookingSuccess] = useState<any>(null);
   const [bookingError, setBookingError] = useState("");
@@ -157,6 +159,9 @@ export default function TripDetailPage() {
       passengerName: passengerName.trim(),
       passengerDocType,
       passengerDocNum: passengerDocNum.trim(),
+      passengerPhone: passengerPhone.trim() || undefined,
+      passengerAge: passengerAge ? Number(passengerAge) : undefined,
+      observations: observations.trim() || undefined,
       startWaypointId,
       endWaypointId,
       seatId: selectedSeats[0], // Por ahora 1 asiento por reserva
@@ -734,13 +739,38 @@ export default function TripDetailPage() {
                     </div>
                   </div>
 
-                  {/* Teléfono */}
+                  {/* Teléfono y edad */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Teléfono (opcional)</label>
+                      <input
+                        value={passengerPhone}
+                        onChange={e => setPassengerPhone(e.target.value)}
+                        placeholder="987654321"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Edad (opcional)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={120}
+                        value={passengerAge}
+                        onChange={e => setPassengerAge(e.target.value)}
+                        placeholder="30"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Observaciones */}
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Teléfono (opcional)</label>
+                    <label className="text-xs text-slate-400 mb-1 block">Observaciones (opcional)</label>
                     <input
-                      value={passengerPhone}
-                      onChange={e => setPassengerPhone(e.target.value)}
-                      placeholder="987654321"
+                      value={observations}
+                      onChange={e => setObservations(e.target.value)}
+                      placeholder="Ej: pasajero con equipaje adicional"
                       className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
                     />
                   </div>
