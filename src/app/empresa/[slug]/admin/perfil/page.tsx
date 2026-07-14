@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Building2, Palette, Phone, Globe, MapPin, Mail,
-  Save, CheckCircle2, AlertCircle, RefreshCw, ExternalLink, Copy, Check
+  Save, CheckCircle2, AlertCircle, RefreshCw, ExternalLink, Copy, Check,
+  FileText, Plus, Trash2,
 } from "lucide-react";
 import { getMyBranding, updateMyBranding } from "@/lib/api/branding";
 import ImageUploader from "@/components/ui/ImageUploader";
@@ -26,6 +27,10 @@ type CompanyBranding = {
   description: string | null;
   contactEmail: string | null;
   sliderImages: string[] | null;
+  fiscalAddress: string | null;
+  officeBranches: { city: string; address: string; phone: string }[] | null;
+  sunatPrintAuthorization: string | null;
+  manifestSeries: string | null;
 };
 
 export default function EmpresaAdminPerfilPage() {
@@ -37,7 +42,7 @@ export default function EmpresaAdminPerfilPage() {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<"identidad" | "contacto" | "preview">("identidad");
+  const [activeTab, setActiveTab] = useState<"identidad" | "contacto" | "manifiesto" | "preview">("identidad");
   const [urlCopied, setUrlCopied] = useState(false);
 
   const [form, setForm] = useState({
@@ -53,6 +58,10 @@ export default function EmpresaAdminPerfilPage() {
     description: "",
     contactEmail: "",
     sliderImages: [] as string[],
+    fiscalAddress: "",
+    officeBranches: [] as { city: string; address: string; phone: string }[],
+    sunatPrintAuthorization: "",
+    manifestSeries: "001",
   });
 
   useEffect(() => { loadBranding(); }, [slugStr]);
@@ -76,6 +85,10 @@ export default function EmpresaAdminPerfilPage() {
         description: c.description || "",
         contactEmail: c.contactEmail || "",
         sliderImages: c.sliderImages || [],
+        fiscalAddress: c.fiscalAddress || "",
+        officeBranches: c.officeBranches || [],
+        sunatPrintAuthorization: c.sunatPrintAuthorization || "",
+        manifestSeries: c.manifestSeries || "001",
       });
     } catch (e: any) {
       setError(e.message);
@@ -150,13 +163,13 @@ export default function EmpresaAdminPerfilPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-slate-900/60 rounded-xl border border-white/5 w-fit">
-        {(["identidad", "contacto", "preview"] as const).map(tab => (
+      <div className="flex gap-1 p-1 bg-slate-900/60 rounded-xl border border-white/5 w-fit flex-wrap">
+        {(["identidad", "contacto", "manifiesto", "preview"] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-5 py-2 rounded-lg text-sm font-medium transition-all capitalize ${
               activeTab === tab ? "bg-indigo-500 text-white" : "text-slate-400 hover:text-white"
             }`}>
-            {tab === "identidad" ? "🎨 Identidad Visual" : tab === "contacto" ? "📞 Contacto" : "👁️ Vista Previa"}
+            {tab === "identidad" ? "🎨 Identidad Visual" : tab === "contacto" ? "📞 Contacto" : tab === "manifiesto" ? "📋 Manifiesto SUNAT" : "👁️ Vista Previa"}
           </button>
         ))}
       </div>
@@ -379,6 +392,112 @@ export default function EmpresaAdminPerfilPage() {
                   <p className="text-white font-medium">{company?.ruc}</p>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ─── TAB: MANIFIESTO SUNAT ─────────────────────────────────────── */}
+        {activeTab === "manifiesto" && (
+          <div className="bg-slate-900/60 border border-white/5 rounded-2xl p-6 space-y-6">
+            <div>
+              <h2 className="font-semibold text-white flex items-center gap-2">
+                <FileText className="w-5 h-5 text-amber-400" /> Datos para el Manifiesto de Pasajeros
+              </h2>
+              <p className="text-slate-500 text-xs mt-1">
+                Estos datos aparecen en el encabezado del Manifiesto de Usuarios que se imprime por cada viaje (formato SUNAT/MTC).
+              </p>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">Domicilio Fiscal</label>
+              <input
+                value={form.fiscalAddress}
+                onChange={e => setForm(f => ({ ...f, fiscalAddress: e.target.value }))}
+                placeholder="Prolongación Mariscal Cáceres N° 152 - Chilca - Huancayo - Junín"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">N° Autorización SUNAT de Impresión</label>
+                <input
+                  value={form.sunatPrintAuthorization}
+                  onChange={e => setForm(f => ({ ...f, sunatPrintAuthorization: e.target.value }))}
+                  placeholder="0407798133"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Serie del Manifiesto</label>
+                <input
+                  value={form.manifestSeries}
+                  onChange={e => setForm(f => ({ ...f, manifestSeries: e.target.value }))}
+                  placeholder="001"
+                  maxLength={10}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                />
+                <p className="text-xs text-slate-600 mt-1">El correlativo (ej. "001-000045") se genera solo, empezando en 1.</p>
+              </div>
+            </div>
+
+            {/* Sedes */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-xs text-slate-400 block font-medium">Sedes / Oficinas</label>
+                  <p className="text-xs text-slate-600">Terminales u oficinas que aparecen en el encabezado (ej. Huancayo, Lima).</p>
+                </div>
+                <button type="button"
+                  onClick={() => setForm(f => ({ ...f, officeBranches: [...f.officeBranches, { city: "", address: "", phone: "" }] }))}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white text-xs font-medium transition-colors flex-shrink-0">
+                  <Plus className="w-3.5 h-3.5" /> Agregar sede
+                </button>
+              </div>
+
+              {form.officeBranches.length === 0 && (
+                <p className="text-xs text-slate-600 italic">Sin sedes registradas todavía.</p>
+              )}
+
+              {form.officeBranches.map((branch, idx) => (
+                <div key={idx} className="grid grid-cols-1 md:grid-cols-[1fr_2fr_1fr_auto] gap-2 p-3 rounded-xl border border-white/5 bg-slate-800/40">
+                  <input
+                    value={branch.city}
+                    onChange={e => setForm(f => {
+                      const branches = [...f.officeBranches];
+                      branches[idx] = { ...branches[idx], city: e.target.value };
+                      return { ...f, officeBranches: branches };
+                    })}
+                    placeholder="Ciudad (ej. HUANCAYO)"
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                  <input
+                    value={branch.address}
+                    onChange={e => setForm(f => {
+                      const branches = [...f.officeBranches];
+                      branches[idx] = { ...branches[idx], address: e.target.value };
+                      return { ...f, officeBranches: branches };
+                    })}
+                    placeholder="Dirección (ej. Av. Evitamiento Norte S/N - Term. Terrestre)"
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                  <input
+                    value={branch.phone}
+                    onChange={e => setForm(f => {
+                      const branches = [...f.officeBranches];
+                      branches[idx] = { ...branches[idx], phone: e.target.value };
+                      return { ...f, officeBranches: branches };
+                    })}
+                    placeholder="Teléfono"
+                    className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, officeBranches: f.officeBranches.filter((_, i) => i !== idx) }))}
+                    className="flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
         )}

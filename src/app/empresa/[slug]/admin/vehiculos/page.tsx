@@ -22,6 +22,9 @@ type Vehicle = {
   createdAt: string;
   imageUrl?: string | null;
   seatTemplate?: any[];
+  brand?: string | null;
+  circulationCard?: string | null;
+  insurancePolicy?: string | null;
 };
 
 const VEHICLE_TYPES = [
@@ -46,6 +49,9 @@ const emptyForm = {
   serviceMode: "INTERPROVINCIAL",
   capacity: 12,
   imageUrl: "",
+  brand: "",
+  circulationCard: "",
+  insurancePolicy: "",
 };
 
 export default function EmpresaAdminVehiculosPage() {
@@ -105,6 +111,9 @@ export default function EmpresaAdminVehiculosPage() {
       serviceMode:  v.serviceMode,
       capacity:     v.capacity,
       imageUrl:     v.imageUrl || "",
+      brand:            v.brand || "",
+      circulationCard:  v.circulationCard || "",
+      insurancePolicy:  v.insurancePolicy || "",
     });
     // Cargar el seatTemplate existente para mostrarlo en el editor visual
     setSeatTemplate(v.seatTemplate as unknown as SeatTemplate || null);
@@ -320,6 +329,40 @@ export default function EmpresaAdminVehiculosPage() {
                 onChange={e => setForm(f => ({ ...f, capacity: +e.target.value }))}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
               />
+            </div>
+          </div>
+
+          {/* Datos para el Manifiesto de Pasajeros (SUNAT/MTC) */}
+          <div className="border-t border-white/5 pt-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">Datos para el Manifiesto (opcional)</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Marca</label>
+                <input
+                  value={form.brand}
+                  onChange={e => setForm(f => ({ ...f, brand: e.target.value }))}
+                  placeholder="Ej: SCANIA"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Tarjeta Única de Circulación</label>
+                <input
+                  value={form.circulationCard}
+                  onChange={e => setForm(f => ({ ...f, circulationCard: e.target.value }))}
+                  placeholder="Ej: 15P22008273E"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">N° de Póliza de Seguro</label>
+                <input
+                  value={form.insurancePolicy}
+                  onChange={e => setForm(f => ({ ...f, insurancePolicy: e.target.value }))}
+                  placeholder="Ej: 1179041-6"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none transition-colors"
+                />
+              </div>
             </div>
           </div>
 

@@ -10,9 +10,10 @@ import { getCurrentUser, authFetch } from "@/lib/auth";
 import { calcTripPrice, API_URL } from "@/lib/config";
 import { useCreateBooking, useCancelBooking, useReserveSeat, useConfirmReservation, useTripManifest } from "@/lib/queries/trips";
 import { getParcelsByTrip, updateParcelStatus } from "@/lib/api/parcels";
+import { getManifestPrintData } from "@/lib/api/trips";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
-import { printPassengerManifest, printParcelManifest } from "@/lib/printUtils";
+import { printPassengerManifest, printParcelManifest, type ManifestPrintData } from "@/lib/printUtils";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -818,6 +819,8 @@ function SaleModal({
   const [docType, setDocType] = useState("DNI");
   const [docNum, setDocNum] = useState("");
   const [phone, setPhone] = useState("");
+  const [age, setAge] = useState("");
+  const [observations, setObservations] = useState("");
   const [payMethod, setPayMethod] = useState<"cash" | "digital">("cash");
   const [startWpId, setStartWpId] = useState(waypoints[0]?.id || "");
   const [endWpId, setEndWpId] = useState(waypoints[waypoints.length - 1]?.id || "");
@@ -867,7 +870,7 @@ function SaleModal({
   useEffect(() => {
     if (open) {
       setSaleMode("sell");
-      setName(""); setDocNum(""); setPhone(""); setError(""); setReceipt(null); setReserved(false);
+      setName(""); setDocNum(""); setPhone(""); setAge(""); setObservations(""); setError(""); setReceipt(null); setReserved(false);
       setStartWpId(waypoints[0]?.id || "");
       setEndWpId(waypoints[waypoints.length - 1]?.id || "");
     }
@@ -889,6 +892,9 @@ function SaleModal({
       tripId, passengerName: name.trim(), passengerDocType: docType,
       passengerDocNum: docNum.trim(), startWaypointId: startWpId,
       endWaypointId: endWpId, seatId,
+      passengerAge: age ? Number(age) : undefined,
+      passengerPhone: phone || undefined,
+      observations: observations.trim() || undefined,
     };
 
     if (saleMode === "reserve") {
@@ -1160,10 +1166,26 @@ function SaleModal({
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Teléfono (opcional)</label>
+                <input value={phone} onChange={e => setPhone(e.target.value)}
+                  placeholder="987654321"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Edad (opcional)</label>
+                <input type="number" min={0} max={120} value={age} onChange={e => setAge(e.target.value)}
+                  placeholder="35"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
+              </div>
+            </div>
+
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Teléfono (opcional)</label>
-              <input value={phone} onChange={e => setPhone(e.target.value)}
-                placeholder="987654321"
+              <label className="text-xs text-slate-400 mb-1 block">Observaciones (opcional)</label>
+              <input value={observations} onChange={e => setObservations(e.target.value)}
+                placeholder="Ej: sube en Virgen, menor con madre en asiento 12"
+                maxLength={200}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-slate-500 transition-colors" />
             </div>
 
@@ -1485,19 +1507,18 @@ export default function SeatMapModal({
 
   const freeCount = effectiveCapacity - occupied.length - reserved.length;
 
-  const handlePrintPassengers = () => {
-    printPassengerManifest(
-      {
-        companyName,
-        companyRuc,
-        companyLogoUrl,
-        routeName,
-        departureTime,
-        vehicleType,
-        plateNumber,
-      },
-      passengers
-    );
+  const [printingManifest, setPrintingManifest] = useState(false);
+
+  const handlePrintPassengers = async () => {
+    setPrintingManifest(true);
+    try {
+      const data = await getManifestPrintData<ManifestPrintData>(tripId);
+      printPassengerManifest(data);
+    } catch (err: any) {
+      alert(err.message || "Error al cargar los datos del manifiesto.");
+    } finally {
+      setPrintingManifest(false);
+    }
   };
 
   const handlePrintParcels = () => {
@@ -1888,7 +1909,7 @@ export default function SeatMapModal({
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={handlePrintPassengers}
-                      disabled={loadingPassengers || passengers.length === 0}
+                      disabled={loadingPassengers || printingManifest || passengers.length === 0}
                       className="p-1 rounded-lg text-slate-500 hover:text-white transition-colors disabled:opacity-40"
                       title="Imprimir Manifiesto"
                     >
@@ -2330,7 +2351,7 @@ export default function SeatMapModal({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePrintPassengers}
-                  disabled={loadingPassengers || passengers.length === 0}
+                  disabled={loadingPassengers || printingManifest || passengers.length === 0}
                   className="p-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors disabled:opacity-40"
                   title="Imprimir Manifiesto"
                 >

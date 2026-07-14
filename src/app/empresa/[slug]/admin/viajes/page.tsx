@@ -24,6 +24,9 @@ type Trip = {
   route: { id: string; name: string; waypoints: any[] };
   vehicle: { id: string; plateNumber: string; vehicleType: string; capacity: number; imageUrl?: string | null };
   driver?: { id: string; name: string; phone: string | null; docNum: string | null } | null;
+  copilotName?: string | null;
+  copilotLicense?: string | null;
+  auxiliarName?: string | null;
 };
 
 type Route = { id: string; name: string };
@@ -68,13 +71,13 @@ export default function EmpresaAdminViajesPage() {
 
   // ── Formulario nuevo viaje ──────────────────────────────────────────────────
   const [showForm, setShowForm] = useState(false);
-  const [tripForm, setTripForm] = useState({ routeId: "", vehicleId: "", departureTime: "", driverId: "" });
+  const [tripForm, setTripForm] = useState({ routeId: "", vehicleId: "", departureTime: "", driverId: "", copilotName: "", copilotLicense: "", auxiliarName: "" });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
   // ── Formulario editar / reprogramar ────────────────────────────────────────
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
-  const [editForm, setEditForm] = useState({ vehicleId: "", departureTime: "", driverId: "" });
+  const [editForm, setEditForm] = useState({ vehicleId: "", departureTime: "", driverId: "", copilotName: "", copilotLicense: "", auxiliarName: "" });
   const [editFormError, setEditFormError] = useState("");
   const [updatingTrip, setUpdatingTrip] = useState(false);
   const [editBookingsCount, setEditBookingsCount] = useState<number | null>(null);
@@ -142,6 +145,9 @@ export default function EmpresaAdminViajesPage() {
       vehicleId: trip.vehicle.id || "",
       departureTime: formatDateTimeLocal(trip.departureTime),
       driverId: trip.driver?.id || "",
+      copilotName: trip.copilotName || "",
+      copilotLicense: trip.copilotLicense || "",
+      auxiliarName: trip.auxiliarName || "",
     });
     setEditFormError("");
     setEditConfirmed(false);
@@ -171,7 +177,10 @@ export default function EmpresaAdminViajesPage() {
 
     setUpdatingTrip(true);
     try {
-      await updateManagementTrip(editingTrip.id, { vehicleId: editForm.vehicleId, departureTime: editForm.departureTime, driverId: editForm.driverId });
+      await updateManagementTrip(editingTrip.id, {
+        vehicleId: editForm.vehicleId, departureTime: editForm.departureTime, driverId: editForm.driverId,
+        copilotName: editForm.copilotName, copilotLicense: editForm.copilotLicense, auxiliarName: editForm.auxiliarName,
+      });
       setSuccess("✅ Viaje reprogramado exitosamente");
       setEditingTrip(null);
       loadData();
@@ -336,10 +345,13 @@ export default function EmpresaAdminViajesPage() {
 
     setSaving(true);
     try {
-      await createManagementTrip({ routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime, driverId: tripForm.driverId || undefined });
+      await createManagementTrip({
+        routeId: tripForm.routeId, vehicleId: tripForm.vehicleId, departureTime: tripForm.departureTime, driverId: tripForm.driverId || undefined,
+        copilotName: tripForm.copilotName || undefined, copilotLicense: tripForm.copilotLicense || undefined, auxiliarName: tripForm.auxiliarName || undefined,
+      });
       setSuccess("✅ Viaje programado exitosamente");
       setShowForm(false);
-      setTripForm({ routeId: "", vehicleId: "", departureTime: "", driverId: "" });
+      setTripForm({ routeId: "", vehicleId: "", departureTime: "", driverId: "", copilotName: "", copilotLicense: "", auxiliarName: "" });
       loadData();
       setTimeout(() => setSuccess(""), 4000);
     } catch (e: any) {
@@ -488,6 +500,39 @@ export default function EmpresaAdminViajesPage() {
                 onChange={e => setTripForm(f => ({ ...f, departureTime: e.target.value }))}
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
               />
+            </div>
+          </div>
+
+          {/* Datos para el Manifiesto de Pasajeros (SUNAT/MTC) */}
+          <div className="border-t border-white/5 pt-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">Tripulación adicional (opcional)</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Copiloto</label>
+                <input
+                  value={tripForm.copilotName}
+                  onChange={e => setTripForm(f => ({ ...f, copilotName: e.target.value }))}
+                  placeholder="Nombre del copiloto"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Licencia del Copiloto</label>
+                <input
+                  value={tripForm.copilotLicense}
+                  onChange={e => setTripForm(f => ({ ...f, copilotLicense: e.target.value }))}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block font-medium">Auxiliar</label>
+                <input
+                  value={tripForm.auxiliarName}
+                  onChange={e => setTripForm(f => ({ ...f, auxiliarName: e.target.value }))}
+                  placeholder="Nombre del auxiliar"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -808,6 +853,34 @@ export default function EmpresaAdminViajesPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Datos para el Manifiesto de Pasajeros (SUNAT/MTC) */}
+              <div className="border-t border-white/5 pt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-400 mb-1.5 block font-medium">Copiloto</label>
+                  <input
+                    value={editForm.copilotName}
+                    onChange={e => setEditForm(f => ({ ...f, copilotName: e.target.value }))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1.5 block font-medium">Licencia Copiloto</label>
+                  <input
+                    value={editForm.copilotLicense}
+                    onChange={e => setEditForm(f => ({ ...f, copilotLicense: e.target.value }))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-400 mb-1.5 block font-medium">Auxiliar</label>
+                  <input
+                    value={editForm.auxiliarName}
+                    onChange={e => setEditForm(f => ({ ...f, auxiliarName: e.target.value }))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
               </div>
 
               {/* MEJORA 2 — checkbox obligatorio cuando hay pasajeros */}

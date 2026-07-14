@@ -24,6 +24,53 @@ export type PassengerPrintData = {
   paymentMethod: string;
 };
 
+/** Payload de GET /trips/:id/manifest-print — formato oficial SUNAT/MTC. */
+export type ManifestPrintData = {
+  company: {
+    ruc: string;
+    tradeName: string;
+    legalName: string;
+    logoUrl: string | null;
+    phone: string | null;
+    fiscalAddress: string | null;
+    officeBranches: { city: string; address: string; phone: string }[];
+    contactEmail: string | null;
+    sunatPrintAuthorization: string | null;
+  };
+  vehicle: {
+    plateNumber: string;
+    brand: string | null;
+    vehicleType: string;
+    circulationCard: string | null;
+    insurancePolicy: string | null;
+    capacity: number;
+  };
+  trip: {
+    id: string;
+    departureTime: string;
+    manifestNumber: string | null;
+    origin: string;
+    destination: string;
+    driver: { name: string; licenseNumber: string | null } | null;
+    copilotName: string | null;
+    copilotLicense: string | null;
+    auxiliarName: string | null;
+  };
+  passengers: {
+    id: string;
+    seatId: string;
+    name: string;
+    document: string;
+    age: number | null;
+    phone: string | null;
+    ticketNumber: string | null;
+    observations: string | null;
+    destination: string;
+    price: number;
+    paymentStatus: string;
+  }[];
+};
+
 export type ParcelPrintData = {
   senderName: string;
   receiverName: string;
@@ -46,233 +93,178 @@ const vehicleLabel: Record<string, string> = {
 /**
  * Abre una ventana del navegador e imprime el Manifiesto de Pasajeros.
  */
-export function printPassengerManifest(trip: TripPrintData, passengers: PassengerPrintData[]) {
+/**
+ * Imprime el Manifiesto de Usuarios en el formato exigido por SUNAT/MTC para
+ * transporte interprovincial (mismo layout que el manifiesto físico
+ * pre-impreso: encabezado con sedes/RUC/N° de manifiesto, grilla de datos del
+ * viaje, tabla de pasajeros con edad/celular/N° de boleto/observaciones).
+ *
+ * OJO: los campos que dependen de datos que la empresa no haya cargado
+ * todavía (licencias, marca/TUC/póliza del vehículo, sedes, N° de
+ * autorización SUNAT) se imprimen en blanco (líneas para completar a mano) en
+ * vez de inventar un valor — así el documento nunca aparenta estar más
+ * completo de lo que realmente está.
+ */
+export function printPassengerManifest(data: ManifestPrintData) {
+  const { company, vehicle, trip, passengers } = data;
   const depDate = new Date(trip.departureTime);
   const dateStr = depDate.toLocaleDateString("es-PE", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const timeStr = depDate.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+  const timeStr = depDate.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }).toUpperCase();
 
-  // Ordenar pasajeros por número de asiento si es posible
+  // Ordenar pasajeros por número de asiento
   const sortedPassengers = [...passengers].sort((a, b) => {
     const numA = parseInt(a.seatId.replace(/\D/g, "")) || 0;
     const numB = parseInt(b.seatId.replace(/\D/g, "")) || 0;
     return numA - numB;
   });
 
-  const win = window.open("", "_blank", "width=850,height=1100");
+  const win = window.open("", "_blank", "width=900,height=1150");
   if (!win) {
     alert("Por favor habilita las ventanas emergentes (popups) para poder imprimir.");
     return;
   }
 
-  const rowsHtml = sortedPassengers.map((p, idx) => `
+  const totalImporte = sortedPassengers.reduce((acc, p) => acc + Number(p.price || 0), 0);
+
+  const rowsHtml = sortedPassengers.map(p => `
     <tr>
-      <td style="text-align: center;">${idx + 1}</td>
-      <td style="text-align: center; font-weight: bold;">${p.seatId.replace(/\D/g, "")}</td>
+      <td style="text-align:center;">${p.seatId.replace(/\D/g, "") || p.seatId}</td>
       <td>${p.name.toUpperCase()}</td>
-      <td style="text-align: center;">${p.document}</td>
-      <td>${p.origin.toLowerCase()}</td>
-      <td>${p.destination.toLowerCase()}</td>
-      <td style="text-align: center; font-size: 10px;">${p.paymentStatus === 'PAID' || p.paymentStatus === 'PAID_DIGITAL' ? 'PAGADO' : 'COBRAR'}</td>
-      <td style="height: 35px;"></td>
+      <td style="text-align:center;">${p.age ?? ""}</td>
+      <td style="text-align:center;">${p.document}</td>
+      <td style="text-align:center;">${p.phone || ""}</td>
+      <td>${p.destination.toUpperCase()}</td>
+      <td style="text-align:center;">${p.ticketNumber || ""}</td>
+      <td style="text-align:right;">S/ ${Number(p.price || 0).toFixed(2)}</td>
+      <td>${p.observations || ""}</td>
     </tr>
   `).join("");
+
+  const branchLines = (company.officeBranches || []).map(b =>
+    `${b.city ? b.city.toUpperCase() + ": " : ""}${b.address}${b.phone ? ` Cel.: ${b.phone}` : ""}`
+  ).join("<br />");
 
   win.document.write(`
     <!DOCTYPE html>
     <html lang="es">
       <head>
         <meta charset="utf-8" />
-        <title>Manifiesto de Pasajeros - ${trip.routeName}</title>
+        <title>Manifiesto de Usuarios - ${trip.origin} / ${trip.destination}</title>
         <style>
-          @page {
-            size: A4 portrait;
-            margin: 15mm 12mm 15mm 12mm;
-          }
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: Arial, Helvetica, sans-serif;
-            color: #000;
-          }
-          body {
-            padding: 10px;
-            background: #fff;
-          }
-          .header-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-          }
-          .header-table td {
-            border: none;
-            padding: 4px;
-          }
-          .title-section {
-            text-align: center;
-            padding: 10px 0;
-          }
-          .title-section h1 {
-            font-size: 20px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-          }
-          .title-section p {
-            font-size: 11px;
-            color: #555;
-            margin-top: 3px;
-          }
-          .info-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            border: 1px solid #000;
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            font-size: 11px;
-          }
-          .info-item {
-            margin-bottom: 6px;
-          }
-          .info-label {
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 10px;
-            color: #444;
-          }
-          .info-val {
-            font-size: 12px;
-            margin-top: 2px;
-          }
-          .manifest-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 11px;
-            margin-bottom: 30px;
-          }
-          .manifest-table th, .manifest-table td {
-            border: 1px solid #000;
-            padding: 6px 8px;
-            text-align: left;
-          }
-          .manifest-table th {
-            background-color: #f0f0f0;
-            font-weight: bold;
-            text-transform: uppercase;
-            font-size: 10px;
-          }
-          .footer-section {
-            margin-top: 40px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-          }
-          .signature-box {
-            width: 30%;
-            text-align: center;
-            border-top: 1px solid #000;
-            padding-top: 8px;
-            margin-top: 50px;
-          }
-          .logo-placeholder {
-            font-size: 16px;
-            font-weight: 900;
-            letter-spacing: -0.5px;
-          }
-          .text-right {
-            text-align: right;
-          }
+          @page { size: A4 portrait; margin: 10mm; }
+          * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; color: #000; }
+          body { padding: 6px; background: #fff; font-size: 10px; }
+          .header-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+          .header-table td { border: none; padding: 2px 6px; vertical-align: top; }
+          .company-name { font-size: 13px; font-weight: 900; }
+          .addr-block { font-size: 9px; line-height: 1.5; }
+          .id-box { border: 1px solid #000; }
+          .id-box td { border: 1px solid #000; padding: 4px 8px; text-align: center; font-size: 10px; }
+          .id-box .title { font-weight: bold; font-size: 11px; }
+
+          .info-table { width: 100%; border-collapse: collapse; border: 1px solid #000; margin-bottom: 8px; font-size: 10px; }
+          .info-table td { border: 1px solid #000; padding: 3px 6px; }
+          .info-label { font-weight: bold; white-space: nowrap; width: 1%; }
+          .info-val { font-weight: bold; }
+          .blank { color: #999; }
+
+          .manifest-table { width: 100%; border-collapse: collapse; font-size: 9px; }
+          .manifest-table th, .manifest-table td { border: 1px solid #000; padding: 3px 5px; text-align: left; }
+          .manifest-table th { background: #eee; font-weight: bold; text-transform: uppercase; font-size: 8px; }
+
+          .footer-section { margin-top: 24px; display: flex; justify-content: space-between; font-size: 10px; }
+          .signature-box { width: 30%; text-align: center; border-top: 1px solid #000; padding-top: 6px; }
         </style>
       </head>
       <body>
         <table class="header-table">
           <tr>
-            <td style="width: 25%;">
-              ${trip.companyLogoUrl ? `
-                <img src="${trip.companyLogoUrl}" alt="${trip.companyName}" style="max-height: 45px; max-width: 150px; object-fit: contain;" />
-              ` : `
-                <span class="logo-placeholder">${trip.companyName.toUpperCase()}</span>
-              `}
+            <td style="width: 22%;">
+              ${company.logoUrl
+                ? `<img src="${company.logoUrl}" alt="${company.tradeName}" style="max-height: 50px; max-width: 140px; object-fit: contain;" /><br />`
+                : ""}
+              <span class="company-name">${company.tradeName.toUpperCase()}</span>
             </td>
-            <td class="title-section" style="width: 50%;">
-              <h1>Manifiesto de Pasajeros</h1>
-              <p>Documento de Control y Abordaje Operativo</p>
+            <td style="width: 56%;" class="addr-block">
+              ${company.fiscalAddress ? `DOM. FISCAL: ${company.fiscalAddress}<br />` : ""}
+              ${branchLines}${branchLines ? "<br />" : ""}
+              ${company.contactEmail ? `E-MAIL: ${company.contactEmail}` : ""}${company.phone ? ` CEL.: ${company.phone}` : ""}
             </td>
-            <td class="text-right" style="width: 25%; font-size: 11px; line-height: 1.4;">
-              <strong>RUC:</strong> ${trip.companyRuc || 'No configurado'}<br />
-              <strong>Fecha Impresión:</strong> ${new Date().toLocaleDateString('es-PE')}<br />
-              <strong>Hora Impresión:</strong> ${new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}
+            <td style="width: 22%;">
+              <table class="id-box" style="width:100%;">
+                <tr><td>RUC: ${company.ruc}</td></tr>
+                <tr><td class="title">MANIFIESTO DE USUARIOS</td></tr>
+                <tr><td>N° ${trip.manifestNumber || "<span class=\"blank\">pendiente</span>"}</td></tr>
+              </table>
             </td>
           </tr>
         </table>
 
-        <div class="info-grid">
-          <div>
-            <div class="info-item">
-              <span class="info-label">Ruta:</span>
-              <div class="info-val" style="font-weight: bold;">${trip.routeName.toUpperCase()}</div>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Fecha del Viaje:</span>
-              <div class="info-val">${dateStr} - ${timeStr}</div>
-            </div>
-          </div>
-          <div>
-            <div class="info-item">
-              <span class="info-label">Placa de Vehículo:</span>
-              <div class="info-val" style="font-weight: bold; text-transform: uppercase;">${trip.plateNumber || '________________'}</div>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Tipo de Vehículo:</span>
-              <div class="info-val">${vehicleLabel[trip.vehicleType] || trip.vehicleType}</div>
-            </div>
-          </div>
-          <div>
-            <div class="info-item">
-              <span class="info-label">Conductor Principal:</span>
-              <div class="info-val">___________________________</div>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Copiloto / Relevo:</span>
-              <div class="info-val">___________________________</div>
-            </div>
-          </div>
-        </div>
+        <table class="info-table">
+          <tr>
+            <td class="info-label">CONDUCTOR</td>
+            <td class="info-val">${trip.driver?.name || '<span class="blank">___________________</span>'}</td>
+            <td class="info-label">LICENCIA</td>
+            <td class="info-val">${trip.driver?.licenseNumber || '<span class="blank">___________</span>'}</td>
+            <td rowspan="3" style="width: 22%; text-align: center; font-size: 8px;">
+              ${company.sunatPrintAuthorization
+                ? `SUNAT N° DE AUTORIZACIÓN<br />DE IMPRESIÓN:<br /><strong>${company.sunatPrintAuthorization}</strong>`
+                : '<span class="blank">Sin N° de autorización SUNAT configurado</span>'}
+            </td>
+          </tr>
+          <tr>
+            <td class="info-label">COPILOTO</td>
+            <td class="info-val">${trip.copilotName || '<span class="blank">___________________</span>'}</td>
+            <td class="info-label">LICENCIA</td>
+            <td class="info-val">${trip.copilotLicense || '<span class="blank">___________</span>'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">AUXILIAR</td>
+            <td class="info-val" colspan="3">${trip.auxiliarName || '<span class="blank">___________________</span>'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">PLACA</td>
+            <td class="info-val">${vehicle.plateNumber}</td>
+            <td class="info-label">MARCA</td>
+            <td class="info-val" colspan="2">${vehicle.brand || '<span class="blank">-</span>'} &nbsp;&nbsp; <span class="info-label">TARJETA ÚNICA DE CIRCULACIÓN:</span> ${vehicle.circulationCard || '<span class="blank">-</span>'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">LUGAR ORIGEN</td>
+            <td class="info-val">${trip.origin.toUpperCase()}</td>
+            <td class="info-label">LUGAR DESTINO</td>
+            <td class="info-val" colspan="2">${trip.destination.toUpperCase()} &nbsp;&nbsp; <span class="info-label">FECHA VIAJE:</span> ${dateStr}</td>
+          </tr>
+          <tr>
+            <td class="info-label">CANT. ASIENTOS</td>
+            <td class="info-val">${vehicle.capacity}</td>
+            <td class="info-label">CANT. EMBARCADOS</td>
+            <td class="info-val" colspan="2">${sortedPassengers.length} &nbsp;&nbsp; <span class="info-label">NRO PÓLIZA:</span> ${vehicle.insurancePolicy || '<span class="blank">-</span>'} &nbsp;&nbsp; <span class="info-label">HORA VIAJE:</span> ${timeStr}</td>
+          </tr>
+        </table>
 
         <table class="manifest-table">
           <thead>
             <tr>
-              <th style="width: 5%; text-align: center;">N°</th>
-              <th style="width: 8%; text-align: center;">Asiento</th>
-              <th style="width: 32%;">Nombres y Apellidos</th>
-              <th style="width: 15%; text-align: center;">Documento</th>
-              <th style="width: 12%;">Origen</th>
-              <th style="width: 12%;">Destino</th>
-              <th style="width: 8%; text-align: center;">Estado</th>
-              <th style="width: 8%; text-align: center;">Firma</th>
+              <th style="width:5%; text-align:center;">Asi</th>
+              <th style="width:24%;">Apellidos y Nombres</th>
+              <th style="width:5%; text-align:center;">Edad</th>
+              <th style="width:11%; text-align:center;">N° Documento</th>
+              <th style="width:10%; text-align:center;">Nro Celular</th>
+              <th style="width:13%;">Destino</th>
+              <th style="width:9%; text-align:center;">N° Boleto</th>
+              <th style="width:8%; text-align:right;">Importe</th>
+              <th style="width:15%;">Observaciones</th>
             </tr>
           </thead>
           <tbody>
-            ${rowsHtml || `<tr><td colspan="8" style="text-align: center; padding: 20px; color: #555;">No hay pasajeros registrados para este viaje.</td></tr>`}
+            ${rowsHtml || `<tr><td colspan="9" style="text-align:center; padding:16px; color:#555;">No hay pasajeros registrados para este viaje.</td></tr>`}
           </tbody>
         </table>
 
-        <div style="font-size: 11px; font-weight: bold; margin-bottom: 20px;">
-          Total Pasajeros a Bordo: ${passengers.length}
-        </div>
-
         <div class="footer-section">
-          <div class="signature-box">
-            Firma del Conductor
-          </div>
-          <div class="signature-box">
-            Firma del Despachador
-          </div>
-          <div class="signature-box">
-            Control de Autoridad / SUTRAN
-          </div>
+          <div class="signature-box">V°B° EMPRESA</div>
+          <div class="signature-box">CONDUCTOR</div>
+          <div class="signature-box">S/ ${totalImporte.toFixed(2)}</div>
         </div>
 
         <script>

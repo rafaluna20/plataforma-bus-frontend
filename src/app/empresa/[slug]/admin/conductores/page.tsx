@@ -19,6 +19,7 @@ type Driver = {
   docType?: string;
   docNum?: string;
   phone?: string;
+  licenseNumber?: string | null;
   company?: { id: string; tradeName: string } | null;
 };
 
@@ -29,6 +30,7 @@ const emptyForm = {
   docType: "DNI",
   docNum: "",
   phone: "",
+  licenseNumber: "",
 };
 
 export default function AdminConductoresPage() {
@@ -104,6 +106,7 @@ export default function AdminConductoresPage() {
       if (form.docType) body.docType = form.docType;
       if (form.docNum) body.docNum = form.docNum;
       if (form.phone) body.phone = form.phone;
+      if (form.licenseNumber) body.licenseNumber = form.licenseNumber;
 
       const data = await createDriver<any>(body);
 
@@ -245,6 +248,15 @@ export default function AdminConductoresPage() {
                 placeholder="12345678"
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-cyan-500 focus:outline-none transition-colors" />
             </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block font-medium">
+                <IdCard className="w-3 h-3 inline mr-1" />N° de Licencia de Conducir
+              </label>
+              <input value={form.licenseNumber}
+                onChange={e => setForm(f => ({ ...f, licenseNumber: e.target.value }))}
+                placeholder="Para el Manifiesto de Pasajeros"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm font-mono focus:border-cyan-500 focus:outline-none transition-colors" />
+            </div>
           </div>
 
           {formError && (
@@ -354,6 +366,12 @@ function DriverCard({
             <span className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/60 rounded-lg">
               <Phone className="w-3.5 h-3.5 text-slate-500" />
               {driver.phone}
+            </span>
+          )}
+          {driver.licenseNumber && (
+            <span className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800/60 rounded-lg">
+              <FileText className="w-3.5 h-3.5 text-slate-500" />
+              Lic. {driver.licenseNumber}
             </span>
           )}
         </div>

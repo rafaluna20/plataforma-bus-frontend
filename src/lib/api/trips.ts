@@ -12,6 +12,17 @@ export function getTripManifest<T = any>(tripId: string) {
   return apiGet<T>(`/api/v1/trips/${tripId}/manifest`, "Error al cargar pasajeros");
 }
 
+/**
+ * Datos completos para imprimir el Manifiesto de Pasajeros (formato SUNAT/MTC):
+ * empresa (sedes, RUC, autorización), vehículo (marca, TUC, póliza), conductor/
+ * copiloto/auxiliar, y pasajeros con edad/celular/N° de boleto/observaciones.
+ * Asigna el N° de manifiesto del viaje la primera vez que se llama (se congela
+ * para reimpresiones).
+ */
+export function getManifestPrintData<T = any>(tripId: string) {
+  return apiGet<T>(`/api/v1/trips/${tripId}/manifest-print`, "Error al cargar los datos del manifiesto");
+}
+
 export function searchTrips<T = any>(params: {
   origin?: string;
   destination?: string;
