@@ -468,12 +468,16 @@ export default function EmpresaViajeDetailPage() {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-lg flex-shrink-0 overflow-hidden border border-white/10 flex items-center justify-center font-bold text-white text-xs"
-              style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-              {company.logoUrl
-                ? <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain p-0.5" />
-                : company.tradeName[0]}
-            </div>
+            {company.logoUrl ? (
+              <div className="w-9 h-9 rounded-xl flex-shrink-0 overflow-hidden border border-white/10 bg-white flex items-center justify-center p-1 shadow-lg">
+                <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="w-9 h-9 rounded-xl flex-shrink-0 flex items-center justify-center font-bold text-white text-sm border border-white/10"
+                style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
+                {company.tradeName[0]}
+              </div>
+            )}
             <div className="min-w-0">
               <Link href={`/empresa/${slugStr}`}
                 className="font-bold text-white text-sm hover:opacity-80 transition-opacity truncate block">
@@ -534,8 +538,9 @@ export default function EmpresaViajeDetailPage() {
               </div>
               <div className="absolute bottom-4 left-4 flex items-center gap-2">
                 {company.logoUrl && (
-                  <img src={company.logoUrl} alt={company.tradeName}
-                    className="w-8 h-8 rounded-lg object-contain border border-white/20 bg-slate-900/60 p-0.5" />
+                  <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/20 bg-white flex items-center justify-center p-1 shadow-md">
+                    <img src={company.logoUrl} alt={company.tradeName} className="w-full h-full object-contain" />
+                  </div>
                 )}
                 <span className="text-white font-bold text-sm drop-shadow">{company.tradeName}</span>
               </div>

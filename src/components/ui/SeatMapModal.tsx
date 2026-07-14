@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, memo, type ReactNode } from "react";
 import {
   X, CheckCircle2, AlertCircle, Loader2,
-  Banknote, CreditCard, ArrowRight, ArrowLeft, Pencil, Package, TicketCheck, Save, RotateCcw,
+  Banknote, CreditCard, ArrowRight, ArrowLeft, Pencil, Package, Ticket, TicketCheck, Save, RotateCcw,
   Users, RefreshCw, MapPin, Printer, Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { getCurrentUser, authFetch } from "@/lib/auth";
@@ -269,10 +269,12 @@ const SeatButton = memo(function SeatButton({
   );
 });
 
-// ─── Estilos compartidos de carrocería (mismo lenguaje visual que AutoSaleMap) ─
-const GLASS_TINT = "linear-gradient(135deg, rgba(59,110,180,0.55), rgba(22,42,74,0.8))";
+// ─── Estilos compartidos de carrocería (Dark Mode Premium) ─────────────────────
+const GLASS_TINT = "linear-gradient(135deg, rgba(99,102,241,0.4), rgba(15,23,42,0.85))";
+const BUS_BODY_BG = "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)";
+const BUS_BORDER = "rgba(99,102,241,0.35)";
 const WINDOW_STRIP_BG =
-  "repeating-linear-gradient(90deg, rgba(30,41,59,0.45) 0px, rgba(30,41,59,0.45) 2px, rgba(226,232,240,0.18) 2px, rgba(226,232,240,0.18) 20px)";
+  "repeating-linear-gradient(90deg, rgba(99,102,241,0.18) 0px, rgba(99,102,241,0.18) 2px, rgba(148,163,184,0.08) 2px, rgba(148,163,184,0.08) 20px)";
 
 /** Banda de ruedas superpuesta al borde de la carrocería (no flotando fuera de ella). */
 const WheelBand = memo(function WheelBand({ position, compact = false }: { position: "top" | "bottom"; compact?: boolean }) {
@@ -298,9 +300,10 @@ type ColVariant = "nose-round" | "nose-sharp" | "tail-square" | "tail-cut";
 const DriverCol = memo(function DriverCol({ variant = "nose-round" }: { variant?: ColVariant }) {
   const sharp = variant === "nose-sharp";
   return (
-    <div className="relative flex flex-col items-center justify-center border-r-2 border-slate-400/40 flex-shrink-0 overflow-hidden"
+    <div className="relative flex flex-col items-center justify-center border-r-2 flex-shrink-0 overflow-hidden"
       style={{
-        background: "linear-gradient(90deg,#8f9cb8,#aab5d0)",
+        background: "linear-gradient(90deg, #1e3a8a, #1e293b)",
+        borderColor: BUS_BORDER,
         minWidth: 75, padding: "16px 10px",
         borderTopLeftRadius: sharp ? 10 : 26,
         borderBottomLeftRadius: sharp ? 10 : 26,
@@ -308,8 +311,8 @@ const DriverCol = memo(function DriverCol({ variant = "nose-round" }: { variant?
       {/* Parabrisas / vidrio delantero */}
       <div className="absolute inset-1.5 rounded-lg" style={{ background: GLASS_TINT, opacity: 0.9 }} />
       <div className="relative"><SteeringWheel /></div>
-      <span className="relative text-[8px] font-bold text-slate-100/90 uppercase tracking-wider mt-2"
-        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>
+      <span className="relative text-[8px] font-bold text-indigo-300/80 uppercase tracking-wider mt-2"
+        style={{ writingMode: "vertical-rl", transform: "rotate(180deg)", textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>
         Conductor
       </span>
     </div>
@@ -319,17 +322,18 @@ const DriverCol = memo(function DriverCol({ variant = "nose-round" }: { variant?
 const PostCol = memo(function PostCol({ variant = "tail-square" }: { variant?: ColVariant }) {
   const cut = variant === "tail-cut";
   return (
-    <div className="relative flex flex-col items-center justify-center border-l-2 border-slate-400/40 flex-shrink-0 overflow-hidden"
+    <div className="relative flex flex-col items-center justify-center border-l-2 flex-shrink-0 overflow-hidden"
       style={{
-        background: "linear-gradient(90deg,#aab5d0,#8f9cb8)",
+        background: "linear-gradient(90deg, #1e293b, #1e3a8a)",
+        borderColor: BUS_BORDER,
         minWidth: cut ? 30 : 34, padding: "16px 6px",
         borderTopRightRadius: cut ? 8 : 18,
         borderBottomRightRadius: cut ? 8 : 18,
         clipPath: cut ? "polygon(0 0, 100% 12%, 100% 88%, 0 100%)" : undefined,
       }}>
       <div className="absolute inset-1 rounded-md" style={{ background: GLASS_TINT, opacity: 0.75 }} />
-      <span className="relative text-[8px] font-bold text-slate-100/90 uppercase tracking-wider"
-        style={{ writingMode: "vertical-rl", textShadow: "0 1px 2px rgba(0,0,0,0.5)" }}>Post.</span>
+      <span className="relative text-[8px] font-bold text-indigo-300/80 uppercase tracking-wider"
+        style={{ writingMode: "vertical-rl", textShadow: "0 1px 4px rgba(0,0,0,0.8)" }}>Post.</span>
     </div>
   );
 });
@@ -605,8 +609,8 @@ const BusMap = memo(function BusMap({
       return (
         <div className="flex flex-col items-center gap-2">
           <div className="relative">
-            <div className="relative rounded-2xl border-2 border-slate-400/50 overflow-hidden"
-              style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+            <div className="relative rounded-2xl border-2 overflow-hidden"
+              style={{ background: BUS_BODY_BG, borderColor: BUS_BORDER }}>
               <WindowStrip edge="top" />
               <div className="flex items-stretch">
                 <DriverCol variant="nose-sharp" />
@@ -651,8 +655,8 @@ const BusMap = memo(function BusMap({
     return (
       <div className="flex flex-col items-center gap-2">
         <div className="relative">
-          <div className="relative rounded-2xl border-2 border-slate-400/50 overflow-hidden"
-            style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+          <div className="relative rounded-2xl border-2 border-slate-700 overflow-hidden"
+            style={{ background: "#1e293b" }}>
             <WindowStrip edge="top" />
             <div className="flex items-stretch">
               <DriverCol variant="nose-sharp" />
@@ -702,8 +706,8 @@ const BusMap = memo(function BusMap({
     return (
       <div className="flex flex-col items-center gap-2">
         <div className="relative">
-          <div className={`relative ${isMinivan ? "rounded-2xl" : "rounded-3xl"} border-2 border-slate-400/50 overflow-hidden`}
-            style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+          <div className={`relative ${isMinivan ? "rounded-2xl" : "rounded-3xl"} border-2 border-slate-700 overflow-hidden`}
+            style={{ background: "#1e293b" }}>
             <WindowStrip edge="top" />
             <div className="flex items-stretch">
               <DriverCol variant={isMinivan ? "nose-sharp" : "nose-round"} />
@@ -761,8 +765,8 @@ const BusMap = memo(function BusMap({
   return (
     <div className="flex flex-col items-center gap-2">
       <div className="relative">
-        <div className={`relative ${isMinivanFallback ? "rounded-2xl" : "rounded-3xl"} border-2 border-slate-400/50 overflow-hidden`}
-          style={{ background: "linear-gradient(180deg,#c8cfe0,#b8c0d8)" }}>
+        <div className={`relative ${isMinivanFallback ? "rounded-2xl" : "rounded-3xl"} border-2 overflow-hidden`}
+          style={{ background: BUS_BODY_BG, borderColor: BUS_BORDER }}>
           <WindowStrip edge="top" />
           <div className="flex items-stretch">
             <DriverCol variant={isMinivanFallback ? "nose-sharp" : "nose-round"} />
@@ -1852,14 +1856,16 @@ export default function SeatMapModal({
                 <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Resumen</p>
                 <div className="space-y-1.5">
                   {[
-                    { label: "Libres", value: freeCount, color: "#22c55e" },
-                    { label: "Ocupados", value: occupied.length, color: "#ef4444" },
-                    { label: "Reservados", value: reserved.length, color: "#a855f7" },
-                    { label: "Proceso", value: 0, color: "#06b6d4" },
+                    { label: "Libres",    value: freeCount,          color: "#22c55e" },
+                    { label: "Ocupados",  value: occupied.length,    color: "#ef4444" },
+                    { label: "Reservados",value: reserved.length,    color: "#a855f7" },
                   ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded-lg"
-                      style={{ background: `${item.color}10` }}>
-                      <span className="text-xs text-slate-400">{item.label}</span>
+                    <div key={i} className="flex items-center justify-between px-2.5 py-2 rounded-lg"
+                      style={{ background: `${item.color}12`, border: `1px solid ${item.color}20` }}>
+                      <div className="flex items-center gap-2">
+                        <SeatIcon color={item.color} label="" size={18} />
+                        <span className="text-xs text-slate-400">{item.label}</span>
+                      </div>
                       <span className="text-sm font-extrabold" style={{ color: item.color }}>{item.value}</span>
                     </div>
                   ))}
@@ -1906,10 +1912,16 @@ export default function SeatMapModal({
                               {s.name !== "Sin vendedor" ? s.name.charAt(0).toUpperCase() : "?"}
                             </div>
                             <p className="text-[10px] text-white font-semibold flex-1 truncate">{s.name}</p>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <span className="text-[9px] font-bold" style={{ color: primaryColor }}>🎫{s.tickets}</span>
-                              <span className="text-[9px] text-slate-600">·</span>
-                              <span className="text-[9px] font-bold text-amber-400">📦{s.parcelsCount}</span>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <div className="flex items-center gap-0.5" title="Pasajes">
+                                <Ticket className="w-2.5 h-2.5" style={{ color: primaryColor }} />
+                                <span className="text-[9px] font-bold" style={{ color: primaryColor }}>{s.tickets}</span>
+                              </div>
+                              <div className="w-px h-2.5 bg-white/10" />
+                              <div className="flex items-center gap-0.5" title="Encomiendas">
+                                <Package className="w-2.5 h-2.5 text-amber-400" />
+                                <span className="text-[9px] font-bold text-amber-400">{s.parcelsCount}</span>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -2284,36 +2296,40 @@ export default function SeatMapModal({
             </div>
           )}
 
-          {/* Leyenda horizontal compacta */}
-          <div className="w-full flex flex-wrap items-center justify-start sm:justify-end gap-3 px-2">
-            {/* Ocultar/mostrar el sidebar (solo desktop — en móvil no existe, se usa la tab bar) */}
+          {/* Barra de controles + leyenda compacta */}
+          <div className="w-full flex items-center gap-3 px-2">
+            {/* Toggle sidebar (solo desktop) */}
             <button
               onClick={() => setSidebarCollapsed(v => !v)}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors mr-auto"
+              className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg border border-white/10 text-slate-500 hover:text-white hover:border-white/25 transition-all flex-shrink-0"
               title={sidebarCollapsed ? "Mostrar panel lateral" : "Ocultar panel lateral"}
             >
               {sidebarCollapsed ? <ArrowRight className="w-3.5 h-3.5" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-              <span className="text-xs font-medium">{sidebarCollapsed ? "Mostrar panel" : "Ocultar panel"}</span>
             </button>
-            {[
-              { color: "#22c55e", label: "Libre",   count: freeCount },
-              { color: "#ef4444", label: "Ocupado", count: occupied.length },
-              { color: "#a855f7", label: "Reservado", count: reserved.length },
-              { color: "#06b6d4", label: "Proceso",   count: 0 },
-            ].map((item, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <SeatIcon color={item.color} label="" size={20} />
-                <span className="text-xs text-slate-400">{item.label}</span>
-                <span className="text-xs font-extrabold" style={{ color: item.color }}>{item.count}</span>
-              </div>
-            ))}
-            {/* Ocultar/mostrar el panel del vehículo (solo desktop) */}
+
+            {/* Leyenda de asientos — solo en móvil donde no hay sidebar */}
+            <div className="lg:hidden flex items-center gap-3 flex-wrap">
+              {[
+                { color: "#22c55e", label: "Libre",    count: freeCount },
+                { color: "#ef4444", label: "Ocupado",  count: occupied.length },
+                { color: "#a855f7", label: "Reservado", count: reserved.length },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center gap-1">
+                  <SeatIcon color={item.color} label="" size={16} />
+                  <span className="text-[11px] text-slate-400">{item.label}</span>
+                  <span className="text-[11px] font-extrabold" style={{ color: item.color }}>{item.count}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex-1" />
+
+            {/* Toggle panel vehículo (solo desktop) */}
             <button
               onClick={() => setVehiclePanelCollapsed(v => !v)}
-              className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
-              title={vehiclePanelCollapsed ? "Mostrar panel del vehículo" : "Ocultar panel del vehículo"}
+              className="hidden lg:flex items-center justify-center w-7 h-7 rounded-lg border border-white/10 text-slate-500 hover:text-white hover:border-white/25 transition-all flex-shrink-0"
+              title={vehiclePanelCollapsed ? "Mostrar vehículo" : "Ocultar vehículo"}
             >
-              <span className="text-xs font-medium">{vehiclePanelCollapsed ? "Mostrar vehículo" : "Ocultar vehículo"}</span>
               {vehiclePanelCollapsed ? <ArrowLeft className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
             </button>
           </div>
