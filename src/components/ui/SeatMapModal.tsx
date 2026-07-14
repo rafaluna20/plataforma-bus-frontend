@@ -2688,8 +2688,8 @@ export default function SeatMapModal({
         }`}
           style={{ background: "#080d1a" }}>
           <div className="flex-1 flex flex-col" style={{ width: "22.4rem" }}>
-            {/* Foto del vehículo (mitad superior) */}
-            <div className="h-1/2 flex-shrink-0 relative border-b border-white/8 bg-slate-900/60">
+            {/* Foto del vehículo (altura reducida 40%) */}
+            <div className="h-[30%] flex-shrink-0 relative border-b border-white/8 bg-slate-900/60">
               <img
                 src={vehicleImageUrl || vehicleImages[vehicleType] || vehicleImages.BUS_1P}
                 alt={plateNumber || vehicleType}
@@ -2701,8 +2701,8 @@ export default function SeatMapModal({
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
             </div>
 
-            {/* Info del vehículo (mitad inferior) */}
-            <div className="h-1/2 flex-shrink-0 p-4 space-y-3 overflow-y-auto">
+            {/* Info del vehículo (ocupa el espacio restante) */}
+            <div className="h-[70%] flex-shrink-0 p-4 space-y-3 overflow-y-auto">
               <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Vehículo</p>
               <div className="space-y-2">
                 {[
