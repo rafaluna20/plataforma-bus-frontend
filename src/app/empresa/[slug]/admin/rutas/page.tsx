@@ -5,8 +5,9 @@ import { useParams } from "next/navigation";
 import {
   Plus, Trash2, MapPin, ArrowRight, AlertCircle, CheckCircle2,
   RefreshCw, Route, Map, Pencil, X, Save, Loader2, Search,
-  ChevronUp, ChevronDown, Info, Clock, DollarSign
+  ChevronUp, ChevronDown, Info, Clock, DollarSign, Percent
 } from "lucide-react";
+import FareRulesModal from "@/components/routes/FareRulesModal";
 import { getCompanyBySlug, getCompanyById } from "@/lib/api/branding";
 import {
   getRoutesByCompany, getAllStations,
@@ -96,6 +97,9 @@ export default function EmpresaAdminRutasPage() {
   // Confirmación eliminar
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Tarifas especiales (franja horaria / fecha) de una ruta
+  const [fareRulesRoute, setFareRulesRoute] = useState<RouteItem | null>(null);
 
   // Estaciones
   const [stations, setStations] = useState<Station[]>([]);
@@ -1192,6 +1196,11 @@ export default function EmpresaAdminRutasPage() {
                     <Pencil className="w-3.5 h-3.5" /> Editar
                   </button>
                   <button
+                    onClick={() => setFareRulesRoute(r)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-amber-400 hover:bg-amber-500/15 hover:border-amber-500/30 border border-transparent transition-all">
+                    <Percent className="w-3.5 h-3.5" /> Tarifas
+                  </button>
+                  <button
                     onClick={() => setDeleteConfirm(r.id)}
                     className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all">
                     <Trash2 className="w-3.5 h-3.5" /> Eliminar
@@ -1201,6 +1210,10 @@ export default function EmpresaAdminRutasPage() {
             );
           })}
         </div>
+      )}
+
+      {fareRulesRoute && (
+        <FareRulesModal route={fareRulesRoute} onClose={() => setFareRulesRoute(null)} />
       )}
     </div>
   );

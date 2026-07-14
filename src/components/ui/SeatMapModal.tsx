@@ -844,6 +844,11 @@ function SaleModal({
   const [payMethod, setPayMethod] = useState<"cash" | "digital">("cash");
   const [startWpId, setStartWpId] = useState(waypoints[0]?.id || "");
   const [endWpId, setEndWpId] = useState(waypoints[waypoints.length - 1]?.id || "");
+  const [overridePrice, setOverridePrice] = useState(false);
+  const [overrideValue, setOverrideValue] = useState("");
+  const [overrideReason, setOverrideReason] = useState("");
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser?.role === "ADMIN" || currentUser?.role === "SUPER_ADMIN";
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<any>(null);
   const [reserved, setReserved] = useState(false);
@@ -893,6 +898,7 @@ function SaleModal({
       setName(""); setDocNum(""); setPhone(""); setAge(""); setObservations(""); setError(""); setReceipt(null); setReserved(false);
       setStartWpId(waypoints[0]?.id || "");
       setEndWpId(waypoints[waypoints.length - 1]?.id || "");
+      setOverridePrice(false); setOverrideValue(""); setOverrideReason("");
     }
   }, [open, seatId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -927,6 +933,14 @@ function SaleModal({
         setError(err.message);
       }
       return;
+    }
+
+    if (isAdmin && overridePrice) {
+      const overrideNum = Number(overrideValue);
+      if (!overrideValue || overrideNum <= 0) { setError("Indica el precio ajustado."); return; }
+      if (!overrideReason.trim()) { setError("Indica el motivo del ajuste de precio."); return; }
+      body.priceOverride = overrideNum;
+      body.overrideReason = overrideReason.trim();
     }
 
     if (payMethod === "digital") body.paymentDetails = { method: "YAPE", phoneNumber: phone };
@@ -1227,6 +1241,37 @@ function SaleModal({
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {saleMode === "sell" && isAdmin && (
+              <div className="rounded-xl border border-white/8 p-3 bg-slate-900/40">
+                {!overridePrice ? (
+                  <button type="button" onClick={() => { setOverridePrice(true); setOverrideValue(displayPrice); }}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-amber-400 transition-colors">
+                    <Pencil className="w-3.5 h-3.5" /> Ajustar precio manualmente (solo ADMIN)
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-amber-400 font-semibold flex items-center gap-1.5">
+                        <Pencil className="w-3.5 h-3.5" /> Precio ajustado
+                      </label>
+                      <button type="button" onClick={() => { setOverridePrice(false); setOverrideValue(""); setOverrideReason(""); }}
+                        className="text-xs text-slate-500 hover:text-white">Cancelar</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" step="0.01" min="0.01" value={overrideValue}
+                        onChange={e => setOverrideValue(e.target.value)}
+                        placeholder={displayPrice}
+                        className="w-full bg-slate-800 border border-amber-500/40 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                      <span className="self-center text-xs text-slate-500">Precio de sistema: S/ {displayPrice}</span>
+                    </div>
+                    <input value={overrideReason} onChange={e => setOverrideReason(e.target.value)}
+                      placeholder="Motivo del ajuste (obligatorio, queda registrado)"
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-amber-500/50" />
+                  </div>
+                )}
               </div>
             )}
 
