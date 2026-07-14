@@ -25,6 +25,15 @@ const LocationPicker = dynamic(() => import("@/components/map/LocationPicker"), 
   )
 });
 
+const RoutePolylineEditor = dynamic(() => import("@/components/map/RoutePolylineEditor"), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full bg-slate-900/50 flex items-center justify-center text-xs text-slate-500" style={{ height: 380 }}>
+      Cargando mapa de trazado...
+    </div>
+  )
+});
+
 const PERU_CITIES: Record<string, { lat: number; lng: number }> = {
   lima: { lat: -12.0464, lng: -77.0428 },
   huancayo: { lat: -12.0651, lng: -75.2048 },
@@ -55,7 +64,7 @@ type Waypoint = {
   basePrice: number;
   basePriceFloor1?: number | null;
 };
-type RouteItem = { id: string; name: string; serviceMode: string; waypoints: any[] };
+type RouteItem = { id: string; name: string; serviceMode: string; waypoints: any[]; polyline?: string | null };
 
 // ── Notificación inline (reemplaza alert()) ──────────────────────────────────
 type ToastType = "success" | "error" | "info";
@@ -91,6 +100,9 @@ export default function EmpresaAdminRutasPage() {
     { stationId: "", stopOrder: 1, estimatedDurationMins: 0, basePrice: 0, basePriceFloor1: null },
     { stationId: "", stopOrder: 2, estimatedDurationMins: 60, basePrice: 45, basePriceFloor1: null },
   ]);
+  // Trazado real de la ruta (puntos [lat,lng] dibujados a mano sobre el mapa,
+  // independiente de las paradas comerciales) — se guarda en route.polyline.
+  const [shapePoints, setShapePoints] = useState<[number, number][]>([]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -268,6 +280,7 @@ export default function EmpresaAdminRutasPage() {
       { stationId: "", stopOrder: 1, estimatedDurationMins: 0, basePrice: 0, basePriceFloor1: null },
       { stationId: "", stopOrder: 2, estimatedDurationMins: 60, basePrice: 45, basePriceFloor1: null },
     ]);
+    setShapePoints([]);
     setFormError("");
     setShowForm(true);
     setTimeout(() => document.getElementById("route-form")?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -292,6 +305,12 @@ export default function EmpresaAdminRutasPage() {
         { stationId: "", stopOrder: 1, estimatedDurationMins: 0, basePrice: 0, basePriceFloor1: null },
         { stationId: "", stopOrder: 2, estimatedDurationMins: 60, basePrice: 45, basePriceFloor1: null },
       ]);
+    }
+    try {
+      const parsed = route.polyline ? JSON.parse(route.polyline) : [];
+      setShapePoints(Array.isArray(parsed) ? parsed : []);
+    } catch {
+      setShapePoints([]);
     }
     setFormError("");
     setShowForm(true);
@@ -377,7 +396,10 @@ export default function EmpresaAdminRutasPage() {
 
     setSaving(true);
     try {
-      const payload = { companyId, name: routeName.trim(), serviceMode, waypoints };
+      const payload = {
+        companyId, name: routeName.trim(), serviceMode, waypoints,
+        polyline: shapePoints.length >= 2 ? JSON.stringify(shapePoints) : null,
+      };
 
       if (editingId) {
         await updateRoute(editingId, payload);
@@ -892,6 +914,44 @@ export default function EmpresaAdminRutasPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Trazado real de la ruta sobre el mapa (independiente de las paradas comerciales) */}
+          <div className="space-y-2 pt-2 border-t border-white/5">
+            <div>
+              <p className="text-sm font-medium text-white flex items-center gap-1.5">
+                <Map className="w-4 h-4 text-amber-400" /> Trazado en el Mapa (opcional)
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Las paradas de arriba solo definen dónde se sube/baja y el precio. Si quieres que el mapa dibuje el camino real (siguiendo la carretera) en vez de una línea recta entre paradas, trázalo aquí.
+              </p>
+            </div>
+            {(() => {
+              const referencePoints = waypoints
+                .filter(wp => wp.stationId)
+                .map(wp => {
+                  const st = stations.find(s => s.id === wp.stationId);
+                  if (!st || st.latitude == null || st.longitude == null) return null;
+                  return { lat: st.latitude, lng: st.longitude, label: st.name };
+                })
+                .filter(Boolean) as { lat: number; lng: number; label: string }[];
+
+              if (referencePoints.length === 0) {
+                return (
+                  <p className="text-xs text-slate-600 p-3 border border-dashed border-white/10 rounded-xl">
+                    Selecciona al menos una parada con coordenadas para poder trazar el camino.
+                  </p>
+                );
+              }
+
+              return (
+                <RoutePolylineEditor
+                  referencePoints={referencePoints}
+                  value={shapePoints}
+                  onChange={setShapePoints}
+                />
+              );
+            })()}
           </div>
 
           {formError && (

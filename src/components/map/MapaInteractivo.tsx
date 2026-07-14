@@ -48,6 +48,8 @@ export interface RutaMapa {
   nombre: string;
   estaciones: EstacionRuta[];
   color?: string; // color de línea personalizado (opcional)
+  /** Trazado real (muchos puntos [lat,lng], dibujado a mano por el admin) — si viene, se usa para la línea en vez de conectar las paradas comerciales en línea recta. */
+  shape?: [number, number][];
 }
 
 interface MapaInteractivoProps {
@@ -274,7 +276,12 @@ export default function MapaInteractivo({
       const estaciones = [...ruta.estaciones].sort((a, b) => a.stopOrder - b.stopOrder);
       const validas = estaciones.filter(e => e.lat && e.lng);
       if (validas.length < 2) return null;
-      const positions: [number, number][] = validas.map(e => [e.lat, e.lng]);
+      // Si hay un trazado real dibujado a mano, se usa para la línea (sigue la
+      // carretera); si no, se conectan las paradas comerciales en línea recta
+      // (aproximación, puede cortar por encima de cerros en tramos largos).
+      const positions: [number, number][] = ruta.shape && ruta.shape.length >= 2
+        ? ruta.shape
+        : validas.map(e => [e.lat, e.lng]);
       const isSelected = rutaSeleccionada?.id === ruta.id;
 
       return (

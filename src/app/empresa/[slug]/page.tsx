@@ -503,10 +503,20 @@ export default function EmpresaPublicaPage() {
               })
               .filter(Boolean) as import('@/components/map/MapaInteractivo').EstacionRuta[];
             if (estaciones.length >= 2) {
+              // Trazado real (opcional): dibujado a mano por el admin sobre el
+              // camino de verdad, en vez de conectar las paradas en línea recta.
+              let shape: [number, number][] | undefined;
+              try {
+                const parsed = (t.route as any).polyline ? JSON.parse((t.route as any).polyline) : null;
+                if (Array.isArray(parsed) && parsed.length >= 2) shape = parsed;
+              } catch {
+                shape = undefined;
+              }
               rutasMap.set(rId, {
                 id: rId,
                 nombre: t.route.name,
                 estaciones,
+                shape,
               });
             }
           });
