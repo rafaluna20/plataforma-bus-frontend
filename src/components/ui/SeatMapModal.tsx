@@ -1790,7 +1790,7 @@ export default function SeatMapModal({
           ? { background: "#f59e0b25", color: "#f59e0b", border: "1px solid #f59e0b50" }
           : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
         <Package className="w-4 h-4" />
-        <span>Encomiendas</span>
+        <span>Encom. ({parcels.length})</span>
       </button>
       {isAdminOrSuper && (
         <button
@@ -1800,7 +1800,12 @@ export default function SeatMapModal({
             ? { background: `${primaryColor}25`, color: primaryColor, border: `1px solid ${primaryColor}50` }
             : { background: "rgba(255,255,255,0.04)", color: "#94a3b8", border: "1px solid #334155" }}>
           <Users className="w-4 h-4" />
-          <span>Vendedores</span>
+          <span>Vendedores ({(() => {
+            const ids = new Set<string>();
+            passengers.forEach(p => { if (p.seller?.id) ids.add(p.seller.id); });
+            parcels.forEach(p => { if ((p as any).seller?.id) ids.add((p as any).seller.id); });
+            return ids.size;
+          })()})</span>
         </button>
       )}
     </div>
