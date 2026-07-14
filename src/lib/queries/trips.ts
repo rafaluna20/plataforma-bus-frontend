@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getTripDetail, getTripManifest } from "@/lib/api/trips";
-import { createCashBooking, createDigitalBooking, cancelBooking } from "@/lib/api/bookings";
+import { createCashBooking, createDigitalBooking, cancelBooking, reserveSeat, confirmReservation } from "@/lib/api/bookings";
 
 /**
  * Claves compartidas por TODAS las pantallas que muestran el detalle/asientos
@@ -52,6 +52,39 @@ export function useCancelBooking(tripId: string | undefined) {
 
   return useMutation({
     mutationFn: (bookingId: string) => cancelBooking<any>(bookingId),
+    onSuccess: () => {
+      if (tripId) {
+        queryClient.invalidateQueries({ queryKey: tripDetailKey(tripId) });
+        queryClient.invalidateQueries({ queryKey: tripManifestKey(tripId) });
+      }
+    },
+  });
+}
+
+/** Aparta un asiento sin cobrar (RESERVED) — misma invalidación que useCreateBooking. */
+export function useReserveSeat(tripId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: unknown) => reserveSeat<any>(body),
+    onSuccess: () => {
+      if (tripId) {
+        queryClient.invalidateQueries({ queryKey: tripDetailKey(tripId) });
+        queryClient.invalidateQueries({ queryKey: tripManifestKey(tripId) });
+      }
+    },
+  });
+}
+
+type ConfirmReservationPayload = { bookingId: string; method: "cash" | "digital"; paymentDetails?: unknown };
+
+/** Confirma una reserva (RESERVED) hacia una venta real — misma invalidación que useCreateBooking. */
+export function useConfirmReservation(tripId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ bookingId, method, paymentDetails }: ConfirmReservationPayload) =>
+      confirmReservation<any>(bookingId, method, paymentDetails),
     onSuccess: () => {
       if (tripId) {
         queryClient.invalidateQueries({ queryKey: tripDetailKey(tripId) });

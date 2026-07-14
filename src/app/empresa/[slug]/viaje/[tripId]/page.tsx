@@ -1378,16 +1378,18 @@ export default function EmpresaViajeDetailPage() {
                 </p>
               </div>
 
-              {/* Notificación de venta exitosa */}
-              {bookingSuccess && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                    <CheckCircle2 className="w-5 h-5" /> ¡Venta confirmada!
+              {/* Notificación de venta/reserva exitosa */}
+              {bookingSuccess && (() => {
+                const isReservation = bookingSuccess.paymentStatus === "RESERVED";
+                return (
+                <div className={`rounded-2xl p-4 space-y-2 border ${isReservation ? "bg-purple-500/10 border-purple-500/30" : "bg-emerald-500/10 border-emerald-500/30"}`}>
+                  <div className={`flex items-center gap-2 font-bold ${isReservation ? "text-purple-400" : "text-emerald-400"}`}>
+                    <CheckCircle2 className="w-5 h-5" /> {isReservation ? "¡Asiento reservado!" : "¡Venta confirmada!"}
                   </div>
                   <div className="text-xs text-slate-300 space-y-1">
                     <p>Asiento: <strong className="text-white">{bookingSuccess.seatId}</strong></p>
                     <p>Total: <strong className="text-white">S/ {Number(bookingSuccess.totalPrice).toFixed(2)}</strong></p>
-                    <p>Estado: <strong className="text-emerald-400">{bookingSuccess.paymentStatus}</strong></p>
+                    <p>Estado: <strong className={isReservation ? "text-purple-400" : "text-emerald-400"}>{bookingSuccess.paymentStatus}</strong></p>
                     <p className="text-slate-500 text-xs">ID: {bookingSuccess.id?.slice(0, 8)}...</p>
                   </div>
                   <div className="flex gap-2 pt-1">
@@ -1404,7 +1406,8 @@ export default function EmpresaViajeDetailPage() {
                     </Link>
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>

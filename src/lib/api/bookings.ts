@@ -16,3 +16,13 @@ export function getMyBookings<T = any>(page = 1, limit = 10) {
 export function cancelBooking<T = any>(bookingId: string) {
   return apiPatch<T>(`/api/v1/bookings/${bookingId}/cancel`, undefined, "Error al cancelar la reserva");
 }
+
+/** Aparta un asiento (nombre + documento) sin cobrar todavía. Solo staff de la empresa. */
+export function reserveSeat<T = any>(body: unknown) {
+  return apiPost<T>(`/api/v1/bookings/reserve`, body, "Error al reservar el asiento");
+}
+
+/** Confirma una reserva hacia una venta real (efectivo o digital). */
+export function confirmReservation<T = any>(bookingId: string, method: "cash" | "digital", paymentDetails?: unknown) {
+  return apiPatch<T>(`/api/v1/bookings/${bookingId}/confirm`, { method, paymentDetails }, "Error al confirmar la reserva");
+}
