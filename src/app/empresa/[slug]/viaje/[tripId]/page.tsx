@@ -437,7 +437,11 @@ export default function EmpresaViajeDetailPage() {
   }
 
   // ─── Datos derivados ─────────────────────────────────────────────────────────
-  const waypoints     = trip.route.waypoints;
+  const waypoints     = (trip.route.waypoints as any[]).map(w => ({
+    ...w,
+    basePrice: Number(w.basePrice ?? 0),
+    basePriceFloor1: w.basePriceFloor1 != null ? Number(w.basePriceFloor1) : null,
+  }));
   const origin        = waypoints[0]?.station?.name || "";
   const destination   = waypoints[waypoints.length - 1]?.station?.name || "";
   const departure     = new Date(trip.departureTime);
