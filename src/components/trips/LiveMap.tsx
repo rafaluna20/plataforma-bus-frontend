@@ -35,8 +35,34 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
   const [location, setLocation] = useState<LocationData | null>(null);
   const [connected, setConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [secondsElapsed, setSecondsElapsed] = useState<number | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState("");
+
+  useEffect(() => {
+    if (!lastUpdate) {
+      setSecondsElapsed(null);
+      return;
+    }
+    const calcElapsed = () => Math.floor((Date.now() - lastUpdate.getTime()) / 1000);
+    setSecondsElapsed(calcElapsed());
+
+    const interval = setInterval(() => {
+      setSecondsElapsed(calcElapsed());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [lastUpdate]);
+
+  const formatTimeElapsed = (seconds: number | null): string => {
+    if (seconds === null) return "—";
+    if (seconds < 60) return `hace ${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    if (mins === 1) return "hace 1 min";
+    if (mins < 60) return `hace ${mins} min`;
+    const hours = Math.floor(mins / 60);
+    return `hace ${hours} h`;
+  };
 
   // ─── Inicializar mapa Leaflet ─────────────────────────────────────────────
   useEffect(() => {
@@ -232,10 +258,7 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
     });
   }, [primaryColor, secondaryColor]);
 
-  // ─── Tiempo desde última actualización ───────────────────────────────────
-  const timeSinceUpdate = lastUpdate
-    ? Math.floor((Date.now() - lastUpdate.getTime()) / 1000)
-    : null;
+
 
   return (
     <div className="space-y-4">
@@ -251,17 +274,29 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {connected ? (
+          {!connected ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>
+              <WifiOff className="w-3.5 h-3.5" />
+              Desconectado
+            </div>
+          ) : secondsElapsed === null ? (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>
+              <Clock className="w-3.5 h-3.5" />
+              Esperando Chofer
+            </div>
+          ) : secondsElapsed < 45 ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
               style={{ background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>
               <Wifi className="w-3.5 h-3.5" />
-              Conectado
+              Señal GPS Activa
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
               style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "1px solid rgba(239,68,68,0.3)" }}>
               <WifiOff className="w-3.5 h-3.5" />
-              Sin señal
+              Chofer Inactivo / Sin GPS
             </div>
           )}
         </div>
@@ -286,8 +321,12 @@ export default function LiveMap({ tripId, waypoints, primaryColor, secondaryColo
             {
               icon: <Clock className="w-4 h-4" />,
               label: "Actualizado",
-              value: timeSinceUpdate !== null ? `hace ${timeSinceUpdate}s` : "—",
-              color: timeSinceUpdate !== null && timeSinceUpdate < 10 ? "#10b981" : "#f59e0b",
+              value: formatTimeElapsed(secondsElapsed),
+              color: secondsElapsed !== null && secondsElapsed < 45 
+                ? "#10b981" 
+                : secondsElapsed !== null && secondsElapsed < 180 
+                  ? "#f59e0b" 
+                  : "#ef4444",
             },
           ].map((stat, i) => (
             <div key={i} className="bg-slate-900/60 border border-white/5 rounded-xl p-3 text-center">
