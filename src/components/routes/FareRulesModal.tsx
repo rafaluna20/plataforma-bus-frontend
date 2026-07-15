@@ -162,7 +162,7 @@ export default function FareRulesModal({ route, onClose }: FareRulesModalProps) 
             </div>
             <div>
               <h2 className="font-bold text-white">Tarifas Especiales</h2>
-              <p className="text-xs text-slate-400">{route.name} · Precio base tramo completo: S/ {basePrice.toFixed(2)}</p>
+              <p className="text-xs text-slate-400">{route.name} · Precio base tramo completo: S/ {Number(basePrice).toFixed(2)}</p>
             </div>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">

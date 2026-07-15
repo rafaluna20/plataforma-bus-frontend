@@ -2999,9 +2999,9 @@ export default function SeatMapModal({
                             <span className="text-xs font-bold text-slate-200 leading-tight">
                               {wp.station.name}
                             </span>
-                            {wp.basePrice > 0 && (
+                            {Number(wp.basePrice) > 0 && (
                               <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">
-                                S/ {wp.basePrice.toFixed(0)}
+                                S/ {Number(wp.basePrice).toFixed(0)}
                               </span>
                             )}
                           </div>
