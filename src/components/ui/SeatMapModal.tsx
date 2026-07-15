@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo, type ReactNode } from 
 import {
   X, CheckCircle2, AlertCircle, Loader2,
   Banknote, CreditCard, ArrowRight, ArrowLeft, Pencil, Package, Ticket, TicketCheck, Save, RotateCcw,
-  Users, RefreshCw, MapPin, Printer, Search, ChevronLeft, ChevronRight, Send
+  Users, RefreshCw, MapPin, Map, Printer, Search, ChevronLeft, ChevronRight, Send
 } from "lucide-react";
 import { getCurrentUser, authFetch } from "@/lib/auth";
 import { calcTripPrice, API_URL } from "@/lib/config";
@@ -14,6 +14,16 @@ import { getManifestPrintData, getTripsByCompany } from "@/lib/api/trips";
 import TicketModal from "@/components/trips/TicketModal";
 import ParcelModal from "@/components/trips/ParcelModal";
 import { printPassengerManifest, printParcelManifest, type ManifestPrintData } from "@/lib/printUtils";
+import dynamic from "next/dynamic";
+
+const LiveMap = dynamic(() => import("@/components/trips/LiveMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center p-12">
+      <div className="w-8 h-8 rounded-full border-2 border-indigo-500 border-t-transparent animate-spin" />
+    </div>
+  ),
+});
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Waypoint = {
@@ -1514,6 +1524,7 @@ export default function SeatMapModal({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [vehiclePanelCollapsed, setVehiclePanelCollapsed] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [showRouteMap, setShowRouteMap] = useState(false);
 
   // ─── Galería de fotos del vehículo (slider en el panel derecho) ───────────
   const vehiclePhotos = useMemo(() => {
@@ -1806,6 +1817,13 @@ export default function SeatMapModal({
               <span className="text-slate-500 text-[10px] ml-1 flex-shrink-0">
                 {dep.toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" })}
               </span>
+              <button
+                onClick={() => setShowRouteMap(true)}
+                className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-[10px] font-bold hover:bg-indigo-500/30 transition-all flex-shrink-0"
+              >
+                <Map className="w-3 h-3 text-indigo-400" />
+                <span>Ver Ruta</span>
+              </button>
             </div>
             <p className="text-slate-500 text-[10px] mt-0.5">{freeCount} libres de {effectiveCapacity}</p>
           </div>
@@ -2939,20 +2957,63 @@ export default function SeatMapModal({
             </div>
 
             {/* Info del vehículo (ocupa el espacio restante) */}
-            <div className="h-[70%] flex-shrink-0 p-4 space-y-3 overflow-y-auto">
-              <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Vehículo</p>
-              <div className="space-y-2">
-                {[
-                  { label: "Placa", value: plateNumber || "—" },
-                  { label: "Tipo", value: vehicleTypeLabel[vehicleType] || vehicleType },
-                  { label: "Capacidad", value: `${effectiveCapacity} asientos` },
-                ].map((item, i) => (
-                  <div key={i} className="flex justify-between items-center gap-3 p-2.5 rounded-lg bg-slate-800/40">
-                    <span className="text-slate-500 text-xs">{item.label}</span>
-                    <span className="font-bold text-sm text-white">{item.value}</span>
-                  </div>
-                ))}
+            <div className="h-[70%] flex-shrink-0 p-4 space-y-5 overflow-y-auto">
+              <div>
+                <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-2">Vehículo</p>
+                <div className="space-y-1.5">
+                  {[
+                    { label: "Placa", value: plateNumber || "—" },
+                    { label: "Tipo", value: vehicleTypeLabel[vehicleType] || vehicleType },
+                    { label: "Capacidad", value: `${effectiveCapacity} asientos` },
+                  ].map((item, i) => (
+                    <div key={i} className="flex justify-between items-center gap-3 p-2 py-1.5 rounded-lg bg-slate-800/40">
+                      <span className="text-slate-500 text-xs">{item.label}</span>
+                      <span className="font-semibold text-xs text-white">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* RUTA DEL VIAJE (TIMELINE) */}
+              {waypoints && waypoints.length > 0 && (
+                <div className="pt-3 border-t border-white/5">
+                  <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-3">Ruta del Viaje</p>
+                  <div className="relative pl-5 space-y-3.5">
+                    {/* Línea conectora */}
+                    <div className="absolute left-2.5 top-2.5 bottom-2.5 w-0.5 bg-slate-800" />
+                    
+                    {waypoints.map((wp, idx) => {
+                      const isFirst = idx === 0;
+                      const isLast = idx === waypoints.length - 1;
+                      
+                      return (
+                        <div key={wp.id} className="relative flex flex-col gap-0.5">
+                          {/* Bolita indicadora */}
+                          <div className={`absolute -left-[18.5px] top-1.5 w-2 h-2 rounded-full border ${
+                            isFirst ? "bg-indigo-500 border-indigo-400 ring-2 ring-indigo-500/20" :
+                            isLast ? "bg-rose-500 border-rose-400 ring-2 ring-rose-500/20" :
+                            "bg-slate-500 border-slate-400"
+                          }`} />
+                          
+                          <div className="flex justify-between items-start gap-2">
+                            <span className="text-xs font-bold text-slate-200 leading-tight">
+                              {wp.station.name}
+                            </span>
+                            {wp.basePrice > 0 && (
+                              <span className="text-[10px] font-semibold text-slate-500 whitespace-nowrap">
+                                S/ {wp.basePrice.toFixed(0)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-slate-500">
+                            {wp.station.city} {isFirst ? " (Origen)" : isLast ? " (Destino)" : ` (Parada ${wp.stopOrder})`}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3066,6 +3127,31 @@ export default function SeatMapModal({
           </div>
         );
       })()}
+      {showRouteMap && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-white/10 rounded-2xl p-6 max-w-4xl w-full h-[80vh] shadow-2xl flex flex-col space-y-4">
+            <div className="flex items-center justify-between flex-shrink-0">
+              <h3 className="font-bold text-white flex items-center gap-2">
+                <Map className="w-5 h-5 text-indigo-400" /> Mapa de Ruta del Viaje
+              </h3>
+              <button 
+                onClick={() => setShowRouteMap(false)} 
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="flex-1 w-full rounded-xl overflow-hidden bg-slate-950 relative border border-white/5">
+              <LiveMap 
+                tripId={tripId} 
+                waypoints={waypoints} 
+                primaryColor={primaryColor} 
+                secondaryColor={secondaryColor} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
