@@ -975,7 +975,7 @@ function SaleModal({
       style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+      <div className="w-full max-w-lg rounded-2xl border border-white/10 shadow-2xl overflow-y-auto max-h-[92vh]"
         style={{ background: "#0f172a" }}>
 
         {/* Header */}
@@ -1373,7 +1373,7 @@ function PassengerDetailModal({
       style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+      <div className="w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-y-auto max-h-[92vh]"
         style={{ background: "#0f172a" }}>
 
         {/* Header */}
